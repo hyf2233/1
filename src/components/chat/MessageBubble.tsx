@@ -57,12 +57,10 @@ export default function MessageBubble({
         onMouseLeave={() => setShowActions(false)}
       >
         <div className="max-w-[60%] group">
-          {showAvatar && (
-            <div className="flex justify-end items-center gap-2 mb-1">
-              <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
-              <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || '我'}</span>
-            </div>
-          )}
+          <div className="flex justify-end items-center gap-2 mb-1">
+            <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+            <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || '我'}</span>
+          </div>
           {hasTypedContent ? (
             /* Typed user message — use type-specific bubble styles on the right */
             <div className="space-y-1.5">
@@ -91,16 +89,14 @@ export default function MessageBubble({
             </div>
           )}
         </div>
-        {/* User avatar on the right */}
+        {/* User avatar on the right — always show */}
         <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
-          {showAvatar && (
-            <Avatar
-              size="sm"
-              name={avatarName || '我'}
-              gradient={avatarGradient || 'linear-gradient(135deg, #07C160, #06AD56)'}
-              src={avatarSrc}
-            />
-          )}
+          <Avatar
+            size="sm"
+            name={avatarName || '我'}
+            gradient={avatarGradient || 'linear-gradient(135deg, #07C160, #06AD56)'}
+            src={avatarSrc}
+          />
         </div>
       </div>
     );
@@ -115,29 +111,25 @@ export default function MessageBubble({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* Avatar column */}
+      {/* Avatar column — always show */}
       <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
-        {showAvatar && (
-          <Avatar
-            size="sm"
-            name={avatarName || 'AI'}
-            gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
-            src={avatarSrc}
-          />
-        )}
+        <Avatar
+          size="sm"
+          name={avatarName || 'AI'}
+          gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
+          src={avatarSrc}
+        />
       </div>
 
       <div className="max-w-[60%] group min-w-0">
-        {/* Time + name label */}
-        {showAvatar && (
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || 'AI'}</span>
-            <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
-          </div>
-        )}
+        {/* Time + name label — always show */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || 'AI'}</span>
+          <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+        </div>
 
         {/* Thinking fold */}
-        {hasThinking && showAvatar && (
+        {hasThinking && (
           <div className="mb-1.5">
             <button
               onClick={() => setThinkingOpen(!thinkingOpen)}
@@ -168,10 +160,7 @@ export default function MessageBubble({
           )}
         </div>
 
-        {/* Consecutive time display */}
-        {!showAvatar && isConsecutive && (
-          <span className="text-[10px] text-wechat-text-light/50 mt-0.5 inline-block ml-1">{timeStr}</span>
-        )}
+        {/* Consecutive messages — compact spacing only */}
 
         {/* Hover actions */}
         {showActions && onDelete && (

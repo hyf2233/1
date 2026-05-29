@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import Modal from '../shared/Modal';
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Search, Hash } from 'lucide-react';
 import { createDefaultEntry } from '../../sillytavern/editor-utils';
 import type { LorebookEntry } from '../../sillytavern/types';
 
@@ -17,6 +17,37 @@ const POSITIONS = [
   { value: 'after_example', label: '示例后' },
   { value: 'at_depth', label: '深度触发' },
 ] as const;
+
+type TriggerMode = 'constant' | 'keyword' | 'secondary';
+
+function getTriggerMode(entry: LorebookEntry): TriggerMode {
+  if (entry.constant) return 'constant';
+  if (entry.selective) return 'secondary';
+  return 'keyword';
+}
+
+/** Extract a human-readable time label from entry content */
+function extractTimeLabel(entry: LorebookEntry): string {
+  // Try to parse header: 【🤖 苏晓月 · 2026/5/29 22:23:43】
+  const headerMatch = entry.content.match(/【[^】]+·\s*([^】]+)】/);
+  if (headerMatch) {
+    const raw = headerMatch[1].trim();
+    // Try to shorten: "2026/5/29 22:23:43" → "5/29 22:23"
+    const timeMatch = raw.match(/(\d{1,2}\/\d{1,2})\s+(\d{2}:\d{2})/);
+    if (timeMatch) return `${timeMatch[1]} ${timeMatch[2]}`;
+    return raw.slice(0, 14);
+  }
+  // Fallback: try to extract time from <chat time="..."> tag
+  const chatMatch = entry.content.match(/<chat[^>]*time="([^"]*)"[^>]*>/);
+  if (chatMatch) return chatMatch[1];
+  return '';
+}
+
+/** Extract a display key label (first key or role name) from entry */
+function extractKeyLabel(entry: LorebookEntry): string {
+  if (entry.keys.length > 0) return entry.keys[0];
+  return '未设置触发词';
+}
 
 export default function LorebookEditor({ lorebookId, onClose }: Props) {
   const lorebooks = useAppStore(s => s.lorebooks);
@@ -81,10 +112,14 @@ export default function LorebookEditor({ lorebookId, onClose }: Props) {
                 onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
                 className="w-full flex items-center justify-between p-3 hover:bg-wechat-bg transition-colors text-left"
               >
-                <span className="text-body font-medium truncate">
-                  #{idx + 1} {entry.keys.join(', ') || '未设置触发词'}
-                </span>
-                <span className="text-wechat-text-gray">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-body font-medium flex-shrink-0">#{idx + 1}</span>
+                  {extractTimeLabel(entry) && (
+                    <span className="text-[12px] text-wechat-text-light flex-shrink-0">{extractTimeLabel(entry)}</span>
+                  )}
+                  <span className="text-[12px] text-wechat-green font-medium truncate">{extractKeyLabel(entry)}</span>
+                </div>
+                <span className="text-wechat-text-gray flex-shrink-0">
                   {expandedId === entry.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </span>
               </button>
@@ -146,25 +181,73 @@ export default function LorebookEditor({ lorebookId, onClose }: Props) {
                       />
                     </div>
                   </div>
+                  {/* Trigger mode — 3 modes */}
+                  <div>
+                    <label className="text-small text-wechat-text-gray">触发模式</label>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1.5">
+                      <label className="flex items-center gap-1.5 text-small cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`trigger-${entry.id}`}
+                          checked={getTriggerMode(entry) === 'constant'}
+                          onChange={() => handleUpdateEntry(entry.id, { constant: true, selective: false })}
+                          className="accent-blue-500"
+                        />
+                        <span className={getTriggerMode(entry) === 'constant' ? 'text-blue-600 font-medium' : ''}>始终触发</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-small cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`trigger-${entry.id}`}
+                          checked={getTriggerMode(entry) === 'keyword'}
+                          onChange={() => handleUpdateEntry(entry.id, { constant: false, selective: false })}
+                          className="accent-green-500"
+                        />
+                        <span className={getTriggerMode(entry) === 'keyword' ? 'text-green-600 font-medium' : ''}>关键词触发</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-small cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`trigger-${entry.id}`}
+                          checked={getTriggerMode(entry) === 'secondary'}
+                          onChange={() => handleUpdateEntry(entry.id, { constant: false, selective: true })}
+                          className="accent-orange-500"
+                        />
+                        <span className={getTriggerMode(entry) === 'secondary' ? 'text-orange-600 font-medium' : ''}>二次触发</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Secondary keys — only show when 二次触发 */}
+                  {getTriggerMode(entry) === 'secondary' && (
+                    <div>
+                      <label className="text-small text-wechat-text-gray">次触发词 (逗号分隔)</label>
+                      <input
+                        id={`entry-secondary-keys-${entry.id}`}
+                        type="text"
+                        value={entry.secondaryKeys.join(', ')}
+                        onChange={e =>
+                          handleUpdateEntry(entry.id, {
+                            secondaryKeys: e.target.value
+                              .split(',')
+                              .map(k => k.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                        placeholder="次关键词..."
+                        className="w-full mt-1 px-3 py-2 bg-wechat-bg rounded-md text-body outline-none"
+                      />
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-small cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={entry.constant}
-                        onChange={e => handleUpdateEntry(entry.id, { constant: e.target.checked })}
-                        className="rounded"
-                      />
-                      始终激活
-                    </label>
-                    <label className="flex items-center gap-2 text-small cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={entry.selective}
-                        onChange={e => handleUpdateEntry(entry.id, { selective: e.target.checked })}
-                        className="rounded"
-                      />
-                      二次触发
-                    </label>
+                    <input
+                      type="checkbox"
+                      checked={entry.addMemo}
+                      onChange={e => handleUpdateEntry(entry.id, { addMemo: e.target.checked })}
+                      className="rounded"
+                    />
+                    添加到记忆
                   </div>
                   <button
                     id={`delete-entry-${entry.id}`}
