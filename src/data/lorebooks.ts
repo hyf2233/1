@@ -13,6 +13,7 @@ function contactToLorebookEntry(contact: Contact, order: number): LorebookEntry 
       `【人物信息 · ${contact.name}】`,
       `姓名：${contact.name}`,
       `学历：${contact.education || '未知'}`,
+      `职业：${contact.occupation || '未知'}`,
       `地区：${contact.region || '未知'}`,
       `来源：${contact.source || '未知'}`,
       `添加时间：${contact.addedTime || '未知'}`,
@@ -398,6 +399,7 @@ export const contactGenFormatLorebook: Lorebook = {
   <char>
     <name>角色姓名</name>
     <education>学历</education>
+    <occupation>职业</occupation>
     <region>所在地区</region>
     <source>来源（如：用户生成、世界观预设、AI生成等）</source>
     <bio>角色简介</bio>
@@ -413,12 +415,13 @@ export const contactGenFormatLorebook: Lorebook = {
 【规则】
 ══════════════════════════════════════
 
-1. 每个 <char> 必须包含 name、education、region、source、bio、avatar 字段
+1. 每个 <char> 必须包含 name、education、occupation、region、source、bio、avatar 字段
 2. education 填写学历，如未指定则填"未知"
-3. region 填写具体地区，需与世界观设定一致
-4. source 填写"AI生成"
-5. bio 写1-2句该角色的简介
-6. avatar 填写CSS渐变，使用合适的颜色搭配
+3. occupation 填写职业，根据角色设定合理推测
+4. region 填写具体地区，需与世界观设定一致
+5. source 填写"AI生成"
+6. bio 写1-2句该角色的简介
+7. avatar 填写CSS渐变，使用合适的颜色搭配
 
 ══════════════════════════════════════
 【示例】
@@ -428,6 +431,7 @@ export const contactGenFormatLorebook: Lorebook = {
   <char>
     <name>陆晨</name>
     <education>京海大学计算机硕士</education>
+    <occupation>黑客</occupation>
     <region>京海市·新城区</region>
     <source>AI生成</source>
     <bio>自由黑客，曾在城市管理局信息部门工作，现为地下情报网络成员</bio>

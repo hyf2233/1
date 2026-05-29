@@ -1,7 +1,7 @@
 import { useAppStore } from '../../store/appStore';
 import Avatar from '../shared/Avatar';
 import type { Contact } from '../../types';
-import { MessageCircle, Phone, Star, GraduationCap, MapPin, Clock, Users } from 'lucide-react';
+import { MessageCircle, Phone, Star, GraduationCap, BriefcaseBusiness, MapPin, Clock, Users } from 'lucide-react';
 
 interface Props { contact: Contact; onClose: () => void; }
 
@@ -66,6 +66,15 @@ export default function ContactDetail({ contact, onClose }: Props) {
             <div>
               <p className="text-small text-wechat-text-gray">学历</p>
               <p className="text-body mt-0.5">{contact.education}</p>
+            </div>
+          </div>
+        )}
+        {contact.occupation && (
+          <div className="flex items-center gap-3">
+            <BriefcaseBusiness size={16} className="text-wechat-text-light flex-shrink-0" />
+            <div>
+              <p className="text-small text-wechat-text-gray">职业</p>
+              <p className="text-body mt-0.5">{contact.occupation}</p>
             </div>
           </div>
         )}

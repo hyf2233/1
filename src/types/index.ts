@@ -26,6 +26,7 @@ export interface Contact {
   unreadCount: number;
   muted: boolean;
   education?: string;       // 学历
+  occupation?: string;      // 职业
   source?: string;          // 来源
   addedTime?: string;       // 添加时间，如 "2026/5/28"
 }

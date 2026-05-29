@@ -205,7 +205,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const characterName = contact?.name || settings.characterName || 'AI';
 
     const { messages: promptMessages, matchedEntries } = assemblePrompt({
-      userInput: content,
+      userInput: `[私聊][${characterName}] ${content}`,
       history: chat.messages,
       preset: activePreset,
       lorebooks: activeLorebooks,
@@ -392,7 +392,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // SillyTavern Lorebooks
   lorebooks: presetLorebooks,
-  activeLorebookIds: ['lb-format-spec'],
+  activeLorebookIds: ['lb-format-spec', 'lb-world-setting', 'lb-character-info', 'lb-contact-gen-format'],
   addLorebook: (lb) => set((st) => ({ lorebooks: [...st.lorebooks, lb] })),
   removeLorebook: (id) => set((st) => ({
     lorebooks: st.lorebooks.filter((b) => b.id !== id),
@@ -888,6 +888,7 @@ function contactToEntryContent(contact: Contact): string {
     `【人物信息 · ${contact.name}】`,
     `姓名：${contact.name}`,
     `学历：${contact.education || '未知'}`,
+    `职业：${contact.occupation || '未知'}`,
     `地区：${contact.region || '未知'}`,
     `来源：${contact.source || '未知'}`,
     `添加时间：${contact.addedTime || new Date().toLocaleDateString('zh-CN')}`,
@@ -902,6 +903,8 @@ function entryContentToContactPatch(content: string): Partial<Contact> {
   if (nameMatch) patch.name = nameMatch[1].trim();
   const eduMatch = content.match(/学历：(.+)/);
   if (eduMatch) patch.education = eduMatch[1].trim();
+  const occMatch = content.match(/职业：(.+)/);
+  if (occMatch) patch.occupation = occMatch[1].trim();
   const regionMatch = content.match(/地区：(.+)/);
   if (regionMatch) patch.region = regionMatch[1].trim();
   const sourceMatch = content.match(/来源：(.+)/);

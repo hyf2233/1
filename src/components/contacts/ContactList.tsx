@@ -22,6 +22,7 @@ function parseCharListXml(xml: string): Partial<Contact>[] {
     results.push({
       name: get('name'),
       education: get('education'),
+      occupation: get('occupation'),
       region: get('region'),
       source: get('source') || 'AI生成',
       bio: get('bio'),
@@ -77,7 +78,7 @@ export default function ContactList() {
       const activeBooks = lorebooks.filter(lb => activeLorebookIds.includes(lb.id));
 
       // Build prompt asking AI to generate characters
-      const prompt = `请根据以下需求生成角色信息。使用 <list> 标签包裹输出：\n\n${query}`;
+      const prompt = `[搜索女性] 请根据以下需求生成角色信息。使用 <list> 标签包裹输出：\n\n${query}`;
 
       const { messages: promptMessages } = assemblePrompt({
         userInput: prompt,
@@ -140,6 +141,7 @@ export default function ContactList() {
       avatarType: 'gradient',
       bio: partial.bio || '',
       education: partial.education || '未知',
+      occupation: partial.occupation || '未知',
       region: partial.region || '未知',
       source: partial.source || 'AI生成',
       addedTime,
@@ -213,7 +215,7 @@ export default function ContactList() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[14px] font-medium">{c.name}</p>
                   <p className="text-[11px] text-wechat-text-gray truncate">
-                    {[c.education, c.region, c.source].filter(Boolean).join(' · ')}
+                    {[c.occupation, c.education, c.region, c.source].filter(Boolean).join(' · ')}
                   </p>
                 </div>
                 <button
