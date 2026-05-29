@@ -13,6 +13,7 @@ import { presetContacts } from '../data/contacts';
 import { presetMoments } from '../data/moments';
 import { presetChats } from '../data/chats';
 import { presetLorebooks } from '../data/lorebooks';
+import { getDatabase, saveLorebook, deleteLorebook as dbDeleteLorebook, getLorebooks, getPresets, getSettings, saveSettings, getChats, saveChat, deleteChat as dbDeleteChat, savePreset, deletePreset as dbDeletePreset } from '../sillytavern/database';
 
 interface AppState {
   // Navigation
@@ -69,6 +70,7 @@ interface AppState {
   removeLorebook: (id: string) => void;
   toggleActiveLorebook: (id: string) => void;
   updateLorebook: (lb: Lorebook) => void;
+  loadFromDB: () => Promise<void>;
 
   // SillyTavern Presets
   presets: ChatPreset[];
@@ -412,50 +414,85 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // SillyTavern Settings
   settings: DEFAULT_SETTINGS,
-  updateSettings: (s) => set({ settings: s }),
+  updateSettings: (s) => {
+    set({ settings: s });
+    saveSettings(s).catch(() => {});
+  },
 
-  // SillyTavern Lorebooks
-  lorebooks: presetLorebooks,
+  // SillyTavern Lorebooks — loaded from IndexedDB via loadFromDB()
+  lorebooks: [],
   activeLorebookIds: ['lb-format-spec', 'lb-world-setting', 'lb-character-info', 'lb-contact-gen-format'],
-  addLorebook: (lb) => set((st) => ({ lorebooks: [...st.lorebooks, lb] })),
-  removeLorebook: (id) => set((st) => ({
-    lorebooks: st.lorebooks.filter((b) => b.id !== id),
-    activeLorebookIds: st.activeLorebookIds.filter((aid) => aid !== id),
-  })),
+  loadFromDB: async () => {
+    try {
+      const [dbLorebooks, dbPresets, dbSettings] = await Promise.all([
+        getLorebooks(), getPresets(), getSettings(),
+      ]);
+      const lorebooks = dbLorebooks.length > 0 ? dbLorebooks : presetLorebooks;
+      const activeIds = ['lb-format-spec', 'lb-world-setting', 'lb-character-info', 'lb-contact-gen-format'];
+      const presets = dbPresets.length > 0 ? dbPresets : [
+        { ...createDefaultPreset(), id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() },
+      ];
+      const settings = dbSettings || DEFAULT_SETTINGS;
+      set({ lorebooks, activeLorebookIds: activeIds, presets, settings });
+    } catch (err) {
+      console.error('Failed to load from IndexedDB:', err);
+      set({ lorebooks: presetLorebooks });
+    }
+  },
+  addLorebook: (lb) => {
+    set((st) => ({ lorebooks: [...st.lorebooks, lb] }));
+    saveLorebook(lb).catch(() => {});
+  },
+  removeLorebook: (id) => {
+    set((st) => ({
+      lorebooks: st.lorebooks.filter((b) => b.id !== id),
+      activeLorebookIds: st.activeLorebookIds.filter((aid) => aid !== id),
+    }));
+    dbDeleteLorebook(id).catch(() => {});
+  },
   toggleActiveLorebook: (id) => set((st) => ({
     activeLorebookIds: st.activeLorebookIds.includes(id)
       ? st.activeLorebookIds.filter((aid) => aid !== id)
       : [...st.activeLorebookIds, id],
   })),
-  updateLorebook: (lb) => set((st) => {
-    // Check if this is a history lorebook → sync entries back to chat
-    const isHistoryBook = lb.id.startsWith('lb-history-');
-    let updatedChats = st.chats;
-
-    if (isHistoryBook) {
-      const contactId = lb.id.replace('lb-history-', '');
-      const chat = st.chats.find(c => c.contactId === contactId);
-      if (chat) {
-        updatedChats = rebuildChatFromLorebook(st.chats, chat.id, lb);
+  updateLorebook: (lb) => {
+    set((st) => {
+      const isHistoryBook = lb.id.startsWith('lb-history-');
+      let updatedChats = st.chats;
+      if (isHistoryBook) {
+        const contactId = lb.id.replace('lb-history-', '');
+        const chat = st.chats.find(c => c.contactId === contactId);
+        if (chat) {
+          updatedChats = rebuildChatFromLorebook(st.chats, chat.id, lb);
+        }
       }
-    }
+      return {
+        lorebooks: st.lorebooks.map((b) => (b.id === lb.id ? lb : b)),
+        chats: updatedChats,
+      };
+    });
+    saveLorebook(lb).catch(() => {});
+  },
 
-    return {
-      lorebooks: st.lorebooks.map((b) => (b.id === lb.id ? lb : b)),
-      chats: updatedChats,
-    };
-  }),
-
-  // SillyTavern Presets
-  presets: [{ ...createDefaultPreset(), id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() }],
+  // SillyTavern Presets — loaded from IndexedDB via loadFromDB()
+  presets: [],
   activePresetId: null,
-  addPreset: (p) => set((st) => ({ presets: [...st.presets, p] })),
-  removePreset: (id) => set((st) => ({
-    presets: st.presets.filter((p) => p.id !== id),
-    activePresetId: st.activePresetId === id ? null : st.activePresetId,
-  })),
+  addPreset: (p) => {
+    set((st) => ({ presets: [...st.presets, p] }));
+    savePreset(p).catch(() => {});
+  },
+  removePreset: (id) => {
+    set((st) => ({
+      presets: st.presets.filter((p) => p.id !== id),
+      activePresetId: st.activePresetId === id ? null : st.activePresetId,
+    }));
+    dbDeletePreset(id).catch(() => {});
+  },
   setActivePreset: (id) => set({ activePresetId: id }),
-  updatePreset: (p) => set((st) => ({ presets: st.presets.map((pr) => (pr.id === p.id ? p : pr)) })),
+  updatePreset: (p) => {
+    set((st) => ({ presets: st.presets.map((pr) => (pr.id === p.id ? p : pr)) }));
+    savePreset(p).catch(() => {});
+  },
 }));
 
 // ========== Helper Functions ==========

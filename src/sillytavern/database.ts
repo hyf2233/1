@@ -78,6 +78,15 @@ export async function initializeDatabase(): Promise<void> {
   if (settingsCount === 0) {
     await db.settings.put({ ...DEFAULT_SETTINGS, key: 'settings' });
   }
+
+  // Seed lorebooks from preset data if DB is empty
+  const lorebookCount = await db.lorebooks.count();
+  if (lorebookCount === 0) {
+    const { presetLorebooks } = await import('../data/lorebooks');
+    for (const lb of presetLorebooks) {
+      await db.lorebooks.put(lb);
+    }
+  }
 }
 
 export async function clearAllData(): Promise<void> {
