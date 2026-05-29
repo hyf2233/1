@@ -2,7 +2,7 @@
 import type { ChatSession as STChatSession } from '../sillytavern/types';
 
 // Re-export SillyTavern types
-export type { ChatMessage, ChatPreset, Lorebook, LorebookEntry, AppSettings, ApiSettings, ParsedTags } from '../sillytavern/types';
+export type { ChatMessage, ChatPreset, Lorebook, LorebookEntry, AppSettings, ApiSettings, ParsedTags, ChatEntry, ChatEntryType } from '../sillytavern/types';
 
 // Extended ChatSession with WeChat-specific contactId
 export interface ChatSession extends STChatSession {

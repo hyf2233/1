@@ -4,58 +4,78 @@
 
 @layer base {
   * { @apply border-wechat-divider; }
-  body { @apply bg-wechat-bg text-wechat-text font-sans text-body; }
+  body {
+    @apply bg-wechat-bg text-wechat-text font-sans text-body;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   ::selection { @apply bg-wechat-green text-white; }
-  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-200 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-300; }
 }
 
 @layer components {
+  /* ── Sidebar ── */
   .sidebar-item {
     @apply flex flex-col items-center justify-center gap-1 py-4 px-2 text-wechat-text-gray
-           hover:text-wechat-green transition-colors duration-200 cursor-pointer text-caption;
+           hover:text-wechat-green transition-all duration-200 cursor-pointer text-caption;
   }
-  .sidebar-item.active {
-    @apply text-wechat-green;
-  }
+  .sidebar-item.active { @apply text-wechat-green; }
+
+  /* ── Chat Bubbles ── */
   .chat-bubble-user {
-    @apply bg-wechat-bubble px-3 py-2 max-w-[65%] text-body ml-auto relative;
+    @apply px-3.5 py-2.5 max-w-full text-body relative;
+    background: #95EC69;
     border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s ease;
   }
+  .chat-bubble-user:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
   /* Bubble tail for user messages (right side) */
   .chat-bubble-user::before {
     content: '';
     position: absolute;
     right: -6px;
-    top: 10px;
-    width: 0;
-    height: 0;
+    top: 12px;
+    width: 0; height: 0;
     border-left: 6px solid #95EC69;
     border-top: 4px solid transparent;
     border-bottom: 4px solid transparent;
   }
+
   .chat-bubble-other {
-    @apply bg-white px-3 py-2 max-w-[65%] text-body relative;
+    @apply px-3.5 py-2.5 max-w-full text-body relative;
+    background: #FFFFFF;
     border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s ease;
   }
+  .chat-bubble-other:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
   /* Bubble tail for other messages (left side) */
   .chat-bubble-other::before {
     content: '';
     position: absolute;
     left: -6px;
-    top: 10px;
-    width: 0;
-    height: 0;
-    border-right: 6px solid #fff;
+    top: 12px;
+    width: 0; height: 0;
+    border-right: 6px solid #FFFFFF;
     border-top: 4px solid transparent;
     border-bottom: 4px solid transparent;
   }
-  /* Consecutive messages — tighter spacing */
-  .message-consecutive {
-    margin-top: 2px !important;
+
+  /* ── Consecutive messages — tighter spacing ── */
+  .message-consecutive { margin-top: 1px !important; }
+  .message-consecutive .chat-bubble-other::before,
+  .message-consecutive .chat-bubble-user::before {
+    display: none;
   }
+
+  /* ── Option buttons ── */
   .option-btn {
     @apply w-full text-center py-2.5 px-4 rounded-sm border text-body cursor-pointer
            transition-all duration-150 hover:border-wechat-green hover:text-wechat-green
@@ -70,7 +90,50 @@
   .text-balance { text-wrap: balance; }
 }
 
-/* Pulse ring for online indicator */
+/* ═══════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════ */
+
+/* ── Message entrance (staggered) ── */
+@keyframes messageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.message-enter {
+  animation: messageEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Fade in ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+/* ── Scale in (for modals, forms) ── */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scaleIn {
+  animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Voice waveform ── */
+@keyframes waveform {
+  0% { transform: scaleY(0.4); }
+  100% { transform: scaleY(1); }
+}
+
+/* ── Online pulse ── */
 @keyframes pulse-ring {
   0% { box-shadow: 0 0 0 0 rgba(7, 193, 96, 0.4); }
   70% { box-shadow: 0 0 0 6px rgba(7, 193, 96, 0); }
@@ -78,14 +141,7 @@
 }
 .online-pulse { animation: pulse-ring 2s infinite; }
 
-/* Slide in from right for messages */
-@keyframes message-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.message-animate { animation: message-in 0.3s ease-out; }
-
-/* Shimmer loading effect */
+/* ── Shimmer loading ── */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -96,16 +152,30 @@
   animation: shimmer 1.5s infinite;
 }
 
-/* Hover lift for cards */
+/* ── Typing indicator dots ── */
+@keyframes typing {
+  0%, 100% { opacity: 0.2; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-4px); }
+}
+.typing-dot {
+  animation: typing 1.4s infinite;
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #B0B0B0;
+}
+
+/* ── Hover lift ── */
 .hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
 }
 .hover-lift:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
 }
 
-/* Scale press for buttons */
+/* ── Button press ── */
 .btn-press {
   transition: transform 0.1s ease;
 }
@@ -113,7 +183,7 @@
   transform: scale(0.96);
 }
 
-/* Smooth tab indicator */
+/* ── Sidebar tab indicator ── */
 .sidebar-item::after {
   content: '';
   position: absolute;
@@ -124,8 +194,44 @@
   height: 32px;
   background: #07C160;
   border-radius: 0 999px 999px 0;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .sidebar-item.active::after {
   transform: translateY(-50%) scaleY(1);
+}
+
+/* ═══════════════════════════════════════
+   INTERNAL TOAST NOTIFICATION
+   ═══════════════════════════════════════ */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+}
+.toast-enter {
+  animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.toast-exit {
+  animation: toastOut 0.2s ease-in both;
+}
+
+/* ── Tabular numbers for consistent digit widths ── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }

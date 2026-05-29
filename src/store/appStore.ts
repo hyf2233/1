@@ -492,14 +492,23 @@ function parseApiResponse(raw: string): ApiReply {
   const varsRaw = extractTag(raw, 'vars') || '';
 
   const chats: ApiReply['chats'] = [];
-  const chatRegex = /<chat\s+type="(\w+)"(?:\s+duration="(\d+)")?>([\s\S]*?)<\/chat>/gi;
+  const chatRegex = /<chat\s+type="(\w+)"(?:\s+duration="(\d+)")?(?:\s+amount="([\d.]+)")?(?:\s+note="([^"]*)")?(?:\s+filename="([^"]*)")?(?:\s+filesize="([^"]*)")?(?:\s+address="([^"]*)")?(?:\s+lat="([\d.]+)")?(?:\s+lng="([\d.]+)")?>([\s\S]*?)<\/chat>/gi;
   let m;
   while ((m = chatRegex.exec(raw)) !== null) {
-    chats.push({
-      type: (m[1] as ChatEntry['type']) || 'text',
-      content: m[3].trim(),
+    const type = (m[1] as ChatEntry['type']) || 'text';
+    const entry: ChatEntry = {
+      type,
+      content: (m[10] || '').trim(),
       duration: m[2] ? Number(m[2]) : undefined,
-    });
+      amount: m[3] ? Number(m[3]) : undefined,
+      transferNote: m[4] || undefined,
+      fileName: m[5] || undefined,
+      fileSize: m[6] || undefined,
+      address: m[7] || undefined,
+      lat: m[8] ? Number(m[8]) : undefined,
+      lng: m[9] ? Number(m[9]) : undefined,
+    };
+    chats.push(entry);
   }
 
   if (chats.length === 0) {
@@ -612,13 +621,23 @@ function messageToLorebookEntry(
   // Store message type info for chats (from parsed.chats or as plain text)
   let contentBody = msg.content;
   if (msg.parsed?.chats && msg.parsed.chats.length > 0) {
-    // Store each chat entry with its type
     contentBody = msg.parsed.chats.map(c => {
-      const typeLabel = c.type === 'voice' ? '🎤语音' : c.type === 'video' ? '📹视频' : c.type === 'image' ? '🖼图片' : '💬文字';
-      let line = `[${typeLabel}]`;
-      if (c.duration) line += ` (${c.duration}秒)`;
-      line += ` ${c.content}`;
-      return line;
+      switch (c.type) {
+        case 'voice':
+          return `[语音消息]${c.duration ? ` (${c.duration}秒)` : ''} ${c.content}`;
+        case 'video':
+          return `[视频通话]${c.duration ? ` (${c.duration}秒)` : ''} ${c.content}`;
+        case 'image':
+          return `[图片] ${c.content}`;
+        case 'transfer':
+          return `[转账] ¥${c.amount || 0}${c.transferNote ? ` — ${c.transferNote}` : ''} ${c.content}`;
+        case 'document':
+          return `[文件] ${c.fileName || '未知文件'}${c.fileSize ? ` (${c.fileSize})` : ''} ${c.content}`;
+        case 'location':
+          return `[定位] ${c.address || c.content}`;
+        default:
+          return c.content;
+      }
     }).join('\n');
   }
 
@@ -748,10 +767,12 @@ function generateTavernReply(
     '冒险|遗迹': () => ({
       thinking: hasWorldContext ? `世界书触发: ${matchedEntries.map(e => e.entry.keys.join(',')).join('; ')}` : '冒险话题',
       chats: [
-        { type: 'text', content: '在！刚在看北境遗迹的资料 📖' },
-        { type: 'text', content: '你上次不是说想一起去吗？我查到新线索了' },
+        { type: 'text', content: '在！刚在看北境遗迹的资料' },
+        { type: 'text', content: '你上次不是说想一起去吗？我查到一个新线索' },
+        { type: 'location', address: '京海市北城门西3公里废弃矿洞', lat: 39.92, lng: 116.40, content: '遗迹入口大概在这个位置' },
         { type: 'voice', content: '那个古代符文的位置我基本确定了。在北城门往西三公里的废弃矿洞里。不过这地方有点危险，上次有人进去后失踪了。你考虑清楚要不要来。', duration: 15 },
-        { type: 'text', content: '不过去之前你得准备几样东西：手电筒、登山鞋、还有……勇气 😄' },
+        { type: 'document', fileName: '遗迹装备清单.pdf', fileSize: '156KB', content: '我整理了一份装备清单' },
+        { type: 'text', content: '不过去之前你得准备几样东西：手电筒、登山鞋、还有勇气' },
       ],
     }),
     '情报|禁术|卷轴': () => ({
@@ -759,6 +780,7 @@ function generateTavernReply(
       chats: [
         { type: 'text', content: '嘘...这事不方便打字说' },
         { type: 'voice', content: '那个卷轴来自一个叫沉默之塔的组织。他们在收集古代符文，目的不明。我手上有一份他们的据点分布图。晚上来老地方，我详细跟你说。', duration: 18 },
+        { type: 'transfer', amount: 500, transferNote: '情报费', content: '情报的费用你先收着' },
         { type: 'text', content: '对了，带点现金。不是开玩笑。' },
       ],
     }),
@@ -767,7 +789,8 @@ function generateTavernReply(
       chats: [
         { type: 'text', content: '你可算找我了' },
         { type: 'text', content: '老城区那个失踪案，我又查到了一些东西' },
-        { type: 'image', content: '[图片] 失踪者最后出现的地点——旧码头监控截图' },
+        { type: 'image', content: '失踪者最后出现的地点——旧码头监控截图' },
+        { type: 'document', fileName: '失踪案调查报告.pdf', fileSize: '3.2MB', content: '这是我整理的案情分析' },
         { type: 'text', content: '三个失踪者都收到过一块刻着符文的黑石。我怀疑和沉默之塔有关。你怎么看？' },
       ],
     }),
@@ -775,7 +798,8 @@ function generateTavernReply(
       thinking: '视频通话',
       chats: [
         { type: 'text', content: '打字太慢了，方便视频吗？' },
-        { type: 'video', content: '（视频接通）你看这个——我刚从旧货市场淘到的古籍。封面的符文和北境遗迹的一模一样。这书起码有三百年历史了。', duration: 35 },
+        { type: 'video', content: '你看这个——我刚从旧货市场淘到的古籍。封面的符文和北境遗迹的一模一样。这书起码有三百年历史了。', duration: 35 },
+        { type: 'location', address: '京海市老城区晨曦侦探社', lat: 39.9042, lng: 116.4074, content: '我在侦探社，你过来吧' },
         { type: 'text', content: '怎么样？明天有空的话我带去给你看实物' },
       ],
     }),

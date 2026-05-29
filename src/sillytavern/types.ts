@@ -169,31 +169,43 @@ export interface AppSettings {
   userAvatar?: string;  // base64 data URL for user avatar
 }
 
-export const DEFAULT_FORMAT_PROMPT = `你是微信聊天模拟器中的一个角色。你必须严格按照以下 XML 标签格式输出微信聊天消息，不要使用 Markdown。
+export const DEFAULT_FORMAT_PROMPT = `你是微信聊天模拟器中的一个角色。你必须严格按照以下 XML 标签格式输出微信聊天消息，每条消息都会带时间戳显示。
+
+【7种消息类型 — 全部支持】
+1. <chat type="text">文字聊天内容</chat>
+2. <chat type="voice" duration="8">语音消息文本转写</chat>
+3. <chat type="video" duration="45">视频通话描述</chat>
+4. <chat type="image">图片描述文字</chat>
+5. <chat type="transfer" amount="200" note="还你的饭钱">转账备注</chat>
+6. <chat type="document" filename="调查报告.pdf" filesize="2.4MB">文件说明</chat>
+7. <chat type="location" address="京海市老城区晨曦侦探社" lat="39.9042" lng="116.4074">定位说明</chat>
 
 <thinking>思考过程（可选，会被折叠隐藏）</thinking>
-<chat type="text">文字聊天内容</chat>
-<chat type="voice" duration="8">语音消息的文本描述</chat>
-<chat type="video" duration="45">视频通话描述</chat>
-<chat type="image">图片描述</chat>
 <sum>本回合对话的一句总结</sum>
 <vars>{ "好感度": 5 }</vars>
 
 【重要规则】
 1. 这是微信聊天模拟。你的回复就是角色在微信上发出的聊天消息，不是叙述性描写！
 2. 使用 <chat> 标签包裹每条聊天消息。可以有多条 <chat>，代表连续发送。
-3. type 属性：text=文字, voice=语音, video=视频通话, image=图片
-4. 聊天内容应该口语化、自然、符合微信风格。可以分段、用表情符号。
-5. 可以模拟各种聊天场景：问候、闲聊、约见面、语音留言、视频通话等。
-6. 禁止使用 <option> 标签——用户直接在输入框自由回复。
+3. type 属性有7种：text(文字)、voice(语音)、video(视频)、image(图片)、transfer(转账)、document(文件)、location(定位)
+4. 每条消息会自动带上时间戳，所以不用担心时间显示。
+5. 聊天内容应该口语化、自然、符合微信风格。
+6. 可以模拟各种聊天场景：问候、闲聊、约见面、语音留言、视频通话、转账、发文件、发定位等。
+7. 禁止使用 <option> 标签——用户直接在输入框自由回复。
+8. 语音消息 duration 为秒数；视频通话 duration 为秒数；转账 amount 为金额数字，note 为备注；文件 filename 为文件名，filesize 为大小；定位 address 为地址。
 
 【示例回复（角色：苏晓月）】
 <thinking>用户主动打招呼，我应该友好回应，并结合北境遗迹的线索自然地引导对话。</thinking>
 <chat type="text">在！刚还在看北境遗迹的资料</chat>
 <chat type="text">你上次不是说想一起去吗？我查到了一个新线索</chat>
-<chat type="voice" duration="5">（兴奋的语气）那个古代符文的位置，我基本确定了！明天有空吗？</chat>
-<chat type="text">不过去之前你得准备几样东西：手电筒、登山鞋、还有……勇气 😄</chat>
-<sum>苏晓月分享了北境遗迹的新线索，邀请用户明天一起探险</sum>
+<chat type="voice" duration="5">那个古代符文的位置，我基本确定了！在北城门往西三公里的废弃矿洞里。不过这地方有点危险，上次有人进去后失踪了。</chat>
+<chat type="location" address="京海市北城门西3公里废弃矿洞" lat="39.9200" lng="116.4000">遗迹入口大概在这个位置</chat>
+<chat type="text">不过去之前你得准备几样东西：手电筒、登山鞋</chat>
+<chat type="document" filename="遗迹装备清单.pdf" filesize="156KB">我整理了一份装备清单，你看看</chat>
+<chat type="image">北境遗迹入口的现场照片</chat>
+<chat type="transfer" amount="300" note="装备费用分摊">装备的钱你先帮我垫一下，转给你</chat>
+<chat type="video" duration="120">明天出发前我们视频确认一下路线</chat>
+<sum>苏晓月分享了北境遗迹的新线索，发送了定位和装备清单，约用户明天出发</sum>
 <vars>{ "好感度": 8, "冒险进度": 1 }</vars>`;
 
 export const DEFAULT_TAGS = ['chat', 'sum', 'vars', 'thinking', 'think'] as const;
@@ -308,10 +320,23 @@ export function createDefaultPreset(): Omit<ChatPreset, 'id' | 'createdAt' | 'up
 
 // ========== v3 Game Mode Types ==========
 
+/** Supported chat message types */
+export type ChatEntryType = 'text' | 'voice' | 'video' | 'image' | 'transfer' | 'document' | 'location';
+
 export interface ChatEntry {
-  type: 'text' | 'voice' | 'video' | 'image';
+  type: ChatEntryType;
   content: string;
   duration?: number;
+  /** Transfer-specific */
+  amount?: number;
+  transferNote?: string;
+  /** Document-specific */
+  fileName?: string;
+  fileSize?: string;
+  /** Location-specific */
+  address?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface ParsedTags {

@@ -96,7 +96,7 @@ export default function ChatDetail() {
 
         {/* Streaming text */}
         {isStreaming && streamedText && (
-          <div className="flex justify-start items-start gap-2 message-animate px-4 mt-3">
+          <div className="flex justify-start items-start gap-2 message-enter px-4 mt-3">
             <Avatar
               size="sm"
               name={contact.name}

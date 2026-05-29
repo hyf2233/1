@@ -1,17 +1,30 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import Drawer from '../shared/Drawer';
-import { GitBranch, Clock, Trash2, BookOpen, Plus, X, MessageCircle, Mic, Video, Image } from 'lucide-react';
+import {
+  GitBranch, Clock, Trash2, BookOpen, Plus, X,
+  MessageSquare, Mic, Video, ImageIcon,
+  DollarSign, FileText, MapPin,
+} from 'lucide-react';
 import { createDefaultEntry } from '../../sillytavern/editor-utils';
-import type { LorebookEntry } from '../../sillytavern/types';
+import type { ChatEntryType } from '../../sillytavern/types';
 
-type MsgType = 'text' | 'voice' | 'video' | 'image';
+interface TypeOption {
+  type: ChatEntryType;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+}
 
-const TYPE_CONFIG: { type: MsgType; label: string; icon: React.ReactNode; color: string }[] = [
-  { type: 'text', label: '文字', icon: <MessageCircle size={12} />, color: '#07C160' },
-  { type: 'voice', label: '语音', icon: <Mic size={12} />, color: '#FF9760' },
-  { type: 'video', label: '视频', icon: <Video size={12} />, color: '#576B95' },
-  { type: 'image', label: '图片', icon: <Image size={12} />, color: '#FA5151' },
+const TYPE_OPTIONS: TypeOption[] = [
+  { type: 'text',      label: '文字', icon: <MessageSquare size={12} />, color: '#07C160', bgColor: '#E8F8EF' },
+  { type: 'voice',     label: '语音', icon: <Mic size={12} />,           color: '#FF9760', bgColor: '#FFF3ED' },
+  { type: 'video',     label: '视频', icon: <Video size={12} />,         color: '#576B95', bgColor: '#EEF1F7' },
+  { type: 'image',     label: '图片', icon: <ImageIcon size={12} />,     color: '#1485EE', bgColor: '#E8F2FD' },
+  { type: 'transfer',  label: '转账', icon: <DollarSign size={12} />,    color: '#FA9D3B', bgColor: '#FFF6EF' },
+  { type: 'document',  label: '文件', icon: <FileText size={12} />,      color: '#576B95', bgColor: '#EEF1F7' },
+  { type: 'location',  label: '定位', icon: <MapPin size={12} />,        color: '#FA5151', bgColor: '#FDEDED' },
 ];
 
 export default function HistoryDrawer() {
@@ -24,14 +37,20 @@ export default function HistoryDrawer() {
   const updateLorebook = useAppStore(s => s.updateLorebook);
   const settings = useAppStore(s => s.settings);
   const contacts = useAppStore(s => s.contacts);
+  const showToast = useAppStore(s => s.showToast);
   const chat = activeChat();
 
-  // Add entry form state
+  // Form state
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newEntryRole, setNewEntryRole] = useState<'user' | 'assistant'>('assistant');
-  const [newEntryType, setNewEntryType] = useState<MsgType>('text');
-  const [newEntryContent, setNewEntryContent] = useState('');
-  const [newEntryDuration, setNewEntryDuration] = useState<number | ''>('');
+  const [addRole, setAddRole] = useState<'user' | 'assistant'>('assistant');
+  const [addType, setAddType] = useState<ChatEntryType>('text');
+  const [addContent, setAddContent] = useState('');
+  const [addDuration, setAddDuration] = useState<number | ''>('');
+  const [addAmount, setAddAmount] = useState<number | ''>('');
+  const [addNote, setAddNote] = useState('');
+  const [addFileName, setAddFileName] = useState('');
+  const [addFileSize, setAddFileSize] = useState('');
+  const [addAddress, setAddAddress] = useState('');
 
   if (!chat) return null;
 
@@ -47,42 +66,52 @@ export default function HistoryDrawer() {
   };
 
   const handleDelete = (messageId: string) => {
-    if (confirm('确定删除这条消息？同时会从世界书中移除对应条目。')) {
+    if (deleteMessage && chat) {
       deleteMessage(chat.id, messageId);
+      showToast('消息已删除');
     }
   };
 
   const handleAddEntry = () => {
-    if (!newEntryContent.trim()) return;
+    if (!addContent.trim()) return;
     if (!historyBook) return;
 
-    const roleEmoji = newEntryRole === 'user' ? '👤' : '🤖';
-    const roleName = newEntryRole === 'user' ? userName : characterName;
+    const roleEmoji = ''; // No emoji, using icons in UI instead
+    const roleName = addRole === 'user' ? userName : characterName;
     const timeStr = new Date().toLocaleString('zh-CN');
-    const header = `【${roleEmoji} ${roleName} · ${timeStr}】`;
+    const header = `【${addRole === 'user' ? '用户' : 'AI'} ${roleName} · ${timeStr}】`;
 
-    // Build content body with type info
+    // Build content body with type tags
     let contentBody: string;
-    switch (newEntryType) {
+    switch (addType) {
       case 'voice':
-        contentBody = `[🎤语音]${newEntryDuration ? ` (${newEntryDuration}秒)` : ''} ${newEntryContent.trim()}`;
+        contentBody = `[语音消息]${addDuration ? ` (${addDuration}秒)` : ''} ${addContent.trim()}`;
         break;
       case 'video':
-        contentBody = `[📹视频]${newEntryDuration ? ` (${newEntryDuration}秒)` : ''} ${newEntryContent.trim()}`;
+        contentBody = `[视频通话]${addDuration ? ` (${addDuration}秒)` : ''} ${addContent.trim()}`;
         break;
       case 'image':
-        contentBody = `[🖼图片] ${newEntryContent.trim()}`;
+        contentBody = `[图片] ${addContent.trim()}`;
+        break;
+      case 'transfer':
+        contentBody = `[转账] ¥${addAmount || 0}${addNote ? ` — ${addNote}` : ''} ${addContent.trim()}`;
+        break;
+      case 'document':
+        contentBody = `[文件] ${addFileName || '未知文件'}${addFileSize ? ` (${addFileSize})` : ''} ${addContent.trim()}`;
+        break;
+      case 'location':
+        contentBody = `[定位] ${addAddress || addContent.trim()}`;
         break;
       default:
-        contentBody = newEntryContent.trim();
+        contentBody = addContent.trim();
     }
 
     const entry = createDefaultEntry();
     entry.keys = [
       roleName,
-      newEntryRole === 'user' ? 'role-user' : 'role-assistant',
+      addRole === 'user' ? 'role-user' : 'role-assistant',
       '对话', '聊天记录', '历史', '手动添加',
-      `type-${newEntryType}`,
+      `type-${addType}`,
     ];
     entry.content = `${header}\n${contentBody}`;
     entry.order = Date.now();
@@ -96,42 +125,51 @@ export default function HistoryDrawer() {
     };
     updateLorebook(updatedBook);
     resetForm();
+    showToast('消息已添加到对话中');
   };
 
   const resetForm = () => {
-    setNewEntryContent('');
-    setNewEntryDuration('');
-    setNewEntryType('text');
-    setNewEntryRole('assistant');
+    setAddContent('');
+    setAddDuration('');
+    setAddAmount('');
+    setAddNote('');
+    setAddFileName('');
+    setAddFileSize('');
+    setAddAddress('');
+    setAddType('text');
+    setAddRole('assistant');
     setShowAddForm(false);
   };
 
+  const selectedType = TYPE_OPTIONS.find(t => t.type === addType);
+
   return (
-    <Drawer open={showHistoryDrawer} onClose={toggleHistoryDrawer} title="对话记录" side="left" width="w-80">
+    <Drawer open={showHistoryDrawer} onClose={toggleHistoryDrawer} title="对话记录" side="left" width="w-84">
       <div className="p-3 flex flex-col h-full">
         {/* Info banner */}
-        <div className="bg-wechat-green-light rounded-md p-2.5 mb-3 flex-shrink-0">
+        <div className="bg-wechat-green-light rounded-lg p-3 mb-3 flex-shrink-0">
           <div className="flex items-start gap-2">
-            <BookOpen size={14} className="text-wechat-green mt-0.5 flex-shrink-0" />
+            <BookOpen size={15} className="text-wechat-green mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-small text-wechat-green font-medium">对话保存于世界书</p>
-              <p className="text-small text-wechat-text-gray mt-0.5 leading-relaxed">
-                所有对话自动同步到世界书「{historyBook?.name || `对话记录 - ${characterName}`}」。AI 可读取这些记录。你可以在「我 → 世界书管理」中自由编辑。
+              <p className="text-[13px] text-wechat-green font-semibold">对话保存于世界书</p>
+              <p className="text-[11px] text-wechat-text-gray mt-1 leading-relaxed">
+                所有对话自动同步到世界书「{historyBook?.name || `对话记录 - ${characterName}`}」。AI 可读取这些记录作为上下文。
               </p>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Actions bar */}
         <div className="flex items-center justify-between mb-3 flex-shrink-0">
-          <span className="text-small text-wechat-text-gray">
-            共 {chat.messages.length} 条
-            {historyBook && <span className="ml-1">· 世界书 {historyBook.entries.length} 条</span>}
+          <span className="text-[12px] text-wechat-text-gray">
+            {chat.messages.length} 条消息 · 世界书 {historyBook?.entries.length || 0} 条
           </span>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className={`flex items-center gap-1 text-small transition-colors ${
-              showAddForm ? 'text-wechat-danger' : 'text-wechat-green hover:text-wechat-green-dark'
+            className={`flex items-center gap-1.5 text-[12px] font-medium transition-all duration-200 px-2.5 py-1 rounded-full ${
+              showAddForm
+                ? 'bg-red-50 text-wechat-danger'
+                : 'bg-wechat-green-light text-wechat-green hover:bg-wechat-green/10'
             }`}
           >
             {showAddForm ? <X size={12} /> : <Plus size={12} />}
@@ -141,48 +179,48 @@ export default function HistoryDrawer() {
 
         {/* Add entry form */}
         {showAddForm && (
-          <div className="mb-3 p-3 bg-wechat-bg rounded-md space-y-2.5 flex-shrink-0">
-            {/* Role selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-small text-wechat-text-gray w-10">角色</span>
-              <div className="flex gap-1">
+          <div className="mb-3 p-3 bg-gray-50/80 rounded-xl space-y-3 flex-shrink-0 border border-gray-100 animate-scaleIn">
+            {/* Role + Type row */}
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-wechat-text-gray w-8 flex-shrink-0">角色</span>
+              <div className="flex gap-1.5">
                 <button
-                  onClick={() => setNewEntryRole('assistant')}
-                  className={`px-2.5 py-1 rounded-full text-small transition-colors ${
-                    newEntryRole === 'assistant'
-                      ? 'bg-wechat-green text-white'
-                      : 'bg-white text-wechat-text-gray hover:bg-gray-100'
+                  onClick={() => setAddRole('assistant')}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 ${
+                    addRole === 'assistant'
+                      ? 'bg-wechat-green text-white shadow-sm shadow-wechat-green/20'
+                      : 'bg-white text-wechat-text-gray hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  🤖 {characterName}
+                  {characterName}
                 </button>
                 <button
-                  onClick={() => setNewEntryRole('user')}
-                  className={`px-2.5 py-1 rounded-full text-small transition-colors ${
-                    newEntryRole === 'user'
-                      ? 'bg-wechat-green text-white'
-                      : 'bg-white text-wechat-text-gray hover:bg-gray-100'
+                  onClick={() => setAddRole('user')}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 ${
+                    addRole === 'user'
+                      ? 'bg-wechat-text-secondary text-white shadow-sm'
+                      : 'bg-white text-wechat-text-gray hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  👤 {userName}
+                  {userName}
                 </button>
               </div>
             </div>
 
             {/* Type selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-small text-wechat-text-gray w-10">类型</span>
-              <div className="flex gap-1">
-                {TYPE_CONFIG.map(t => (
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-wechat-text-gray w-8 flex-shrink-0">类型</span>
+              <div className="flex flex-wrap gap-1.5">
+                {TYPE_OPTIONS.map(t => (
                   <button
                     key={t.type}
-                    onClick={() => setNewEntryType(t.type)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-small transition-colors ${
-                      newEntryType === t.type
-                        ? 'text-white'
-                        : 'bg-white text-wechat-text-gray hover:bg-gray-100'
+                    onClick={() => setAddType(t.type)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 active:scale-95 ${
+                      addType === t.type
+                        ? 'text-white shadow-sm'
+                        : 'bg-white text-wechat-text-gray hover:bg-gray-100 border border-gray-200'
                     }`}
-                    style={newEntryType === t.type ? { background: t.color } : {}}
+                    style={addType === t.type ? { background: t.color } : {}}
                   >
                     {t.icon}
                     {t.label}
@@ -191,35 +229,73 @@ export default function HistoryDrawer() {
               </div>
             </div>
 
-            {/* Duration (for voice/video) */}
-            {(newEntryType === 'voice' || newEntryType === 'video') && (
-              <div className="flex items-center gap-2">
-                <span className="text-small text-wechat-text-gray w-10">时长</span>
+            {/* Type-specific fields */}
+            {(addType === 'voice' || addType === 'video') && (
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-wechat-text-gray w-8">时长</span>
                 <input
-                  type="number"
-                  value={newEntryDuration}
-                  onChange={e => setNewEntryDuration(e.target.value ? Number(e.target.value) : '')}
-                  placeholder="秒数（可选）"
-                  min={1}
-                  className="w-28 px-2 py-1 bg-white rounded text-small outline-none"
+                  type="number" min={1} placeholder="秒数"
+                  value={addDuration} onChange={e => setAddDuration(e.target.value ? Number(e.target.value) : '')}
+                  className="w-24 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all"
                 />
-                <span className="text-small text-wechat-text-light">秒</span>
+                <span className="text-[11px] text-wechat-text-light">秒</span>
+              </div>
+            )}
+            {addType === 'transfer' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-wechat-text-gray w-8">金额</span>
+                  <input type="number" min={0} step={0.01} placeholder="0.00"
+                    value={addAmount} onChange={e => setAddAmount(e.target.value ? Number(e.target.value) : '')}
+                    className="w-32 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all" />
+                  <span className="text-[11px] text-wechat-text-light">元</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-wechat-text-gray w-8">备注</span>
+                  <input type="text" placeholder="转账备注" value={addNote}
+                    onChange={e => setAddNote(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all" />
+                </div>
+              </div>
+            )}
+            {addType === 'document' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-wechat-text-gray w-8">文件名</span>
+                  <input type="text" placeholder="文件名.pdf" value={addFileName}
+                    onChange={e => setAddFileName(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-wechat-text-gray w-8">大小</span>
+                  <input type="text" placeholder="2.4MB" value={addFileSize}
+                    onChange={e => setAddFileSize(e.target.value)}
+                    className="w-28 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all" />
+                </div>
+              </div>
+            )}
+            {addType === 'location' && (
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-wechat-text-gray w-8">地址</span>
+                <input type="text" placeholder="详细地址" value={addAddress}
+                  onChange={e => setAddAddress(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all" />
               </div>
             )}
 
             {/* Content */}
             <div>
               <textarea
-                value={newEntryContent}
-                onChange={e => setNewEntryContent(e.target.value)}
+                value={addContent} onChange={e => setAddContent(e.target.value)}
                 placeholder={
-                  newEntryType === 'voice' ? '语音消息的文本描述...' :
-                  newEntryType === 'video' ? '视频通话的描述...' :
-                  newEntryType === 'image' ? '图片描述...' :
+                  addType === 'voice' ? '语音消息的内容...' :
+                  addType === 'video' ? '视频通话描述...' :
+                  addType === 'transfer' ? '转账留言...' :
+                  addType === 'location' ? '定位说明...' :
                   '消息内容...'
                 }
                 rows={3}
-                className="w-full px-3 py-2 bg-white rounded-md text-body outline-none resize-none text-small"
+                className="w-full px-3 py-2 bg-white rounded-lg text-[13px] outline-none resize-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all"
               />
             </div>
 
@@ -227,14 +303,15 @@ export default function HistoryDrawer() {
             <div className="flex gap-2">
               <button
                 onClick={handleAddEntry}
-                disabled={!newEntryContent.trim()}
-                className="flex-1 py-1.5 bg-wechat-green text-white rounded-md text-small font-medium hover:bg-wechat-green-dark transition-colors disabled:opacity-50"
+                disabled={!addContent.trim()}
+                className="flex-1 py-2 rounded-lg text-[13px] font-semibold text-white transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: selectedType?.color || '#07C160' }}
               >
-                添加此条消息
+                添加此消息
               </button>
               <button
                 onClick={resetForm}
-                className="px-3 py-1.5 bg-gray-200 rounded-md text-small hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 rounded-lg text-[13px] text-wechat-text-gray bg-gray-200 hover:bg-gray-300 transition-all duration-200"
               >
                 取消
               </button>
@@ -243,65 +320,57 @@ export default function HistoryDrawer() {
         )}
 
         {/* Message list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto -mx-1 px-1">
           {chat.messages.map((msg, idx) => (
             <div
               key={msg.id}
-              className="w-full flex items-start gap-2 p-2 rounded-md hover:bg-wechat-bg transition-colors border-b border-wechat-divider last:border-0"
+              className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-gray-50 transition-all duration-150 cursor-pointer group/item"
+              onClick={() => handleBacktrack(msg.id)}
             >
-              <button
-                onClick={() => handleBacktrack(msg.id)}
-                className="flex-1 flex items-start gap-2 text-left min-w-0"
-              >
-                <div className="flex-shrink-0 mt-0.5">
-                  {msg.role === 'assistant' ? (
-                    <div className="w-5 h-5 rounded-full bg-wechat-green flex items-center justify-center text-white text-[9px] font-medium">
-                      {characterName[0]}
-                    </div>
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-wechat-text-secondary flex items-center justify-center text-white text-[9px] font-medium">
-                      {userName[0]}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="text-small font-medium">
-                      {msg.role === 'assistant' ? characterName : userName}
-                    </span>
-                    <span className="text-small text-wechat-text-light flex items-center gap-0.5">
-                      <Clock size={9} />
-                      {new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <span className="text-small text-wechat-text-light ml-auto">#{idx + 1}</span>
+              <div className="flex-shrink-0 mt-0.5">
+                {msg.role === 'assistant' ? (
+                  <div className="w-6 h-6 rounded-full bg-wechat-green flex items-center justify-center text-white text-[10px] font-bold shadow-sm shadow-wechat-green/20">
+                    {characterName[0]}
                   </div>
-                  <p className="text-small text-wechat-text-gray truncate">{msg.content.slice(0, 60)}</p>
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-wechat-text-secondary flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
+                    {userName[0]}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12px] font-semibold">
+                    {msg.role === 'assistant' ? characterName : userName}
+                  </span>
+                  <span className="text-[10px] text-wechat-text-light/60 flex items-center gap-1">
+                    <Clock size={9} />
+                    {new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="text-[10px] text-wechat-text-light/40 ml-auto">#{idx + 1}</span>
                 </div>
-              </button>
-              <div className="flex flex-col gap-0.5 flex-shrink-0 mt-0.5">
-                <button
-                  onClick={() => handleBacktrack(msg.id)}
-                  className="p-0.5 hover:text-wechat-green transition-colors"
-                  title="回溯到此"
-                >
-                  <GitBranch size={12} className="text-wechat-text-light" />
+                <p className="text-[12px] text-wechat-text-gray truncate mt-0.5 leading-relaxed">
+                  {msg.content.slice(0, 80)}
+                </p>
+              </div>
+              <div className="flex flex-col gap-1 flex-shrink-0 mt-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity duration-150">
+                <button onClick={(e) => { e.stopPropagation(); handleBacktrack(msg.id); }}
+                  className="p-1 rounded hover:bg-wechat-green-light hover:text-wechat-green transition-all" title="回溯">
+                  <GitBranch size={11} />
                 </button>
-                <button
-                  onClick={() => handleDelete(msg.id)}
-                  className="p-0.5 hover:text-wechat-danger transition-colors"
-                  title="删除消息"
-                >
-                  <Trash2 size={12} className="text-wechat-text-light" />
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(msg.id); }}
+                  className="p-1 rounded hover:bg-red-50 hover:text-wechat-danger transition-all" title="删除">
+                  <Trash2 size={11} />
                 </button>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Footer hint */}
-        <div className="mt-3 pt-3 border-t border-wechat-divider flex-shrink-0">
-          <p className="text-small text-wechat-text-light leading-relaxed">
-            💡 前往 <span className="text-wechat-green font-medium">我 → 世界书管理</span>，编辑「{historyBook?.name || `对话记录 - ${characterName}`}」可实时修改聊天内容。删除世界书条目会从聊天中移除对应消息。
+        {/* Footer */}
+        <div className="mt-3 pt-3 border-t border-gray-100 flex-shrink-0">
+          <p className="text-[11px] text-wechat-text-light/60 leading-relaxed">
+            前往 <span className="text-wechat-green font-semibold">我 → 世界书管理</span> 编辑「{historyBook?.name || `对话记录 - ${characterName}`}」可实时修改聊天内容
           </p>
         </div>
       </div>

@@ -1,30 +1,57 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { CheckCircle, AlertCircle, X } from 'lucide-react';
 
 export default function Toast() {
   const toastMessage = useAppStore(s => s.toastMessage);
   const clearToast = useAppStore(s => s.clearToast);
+  const [visible, setVisible] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
-    if (!toastMessage) return;
-    const t = setTimeout(clearToast, 2500);
-    return () => clearTimeout(t);
+    if (toastMessage) {
+      setVisible(true);
+      setExiting(false);
+      const timer = setTimeout(() => {
+        setExiting(true);
+        setTimeout(() => {
+          setVisible(false);
+          clearToast();
+        }, 200);
+      }, 2600);
+      return () => clearTimeout(timer);
+    }
   }, [toastMessage, clearToast]);
 
-  if (!toastMessage) return null;
+  if (!visible || !toastMessage) return null;
 
-  const isWarning = toastMessage.includes('失败') || toastMessage.includes('错误');
+  const isError = toastMessage.includes('失败') || toastMessage.includes('错误');
 
   return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] animate-slide-up">
-      <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg shadow-lg text-body ${
-        isWarning ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-white text-wechat-text border border-gray-100'
-      }`}>
-        {isWarning ? <AlertCircle size={16} className="text-wechat-danger" /> : <CheckCircle size={16} className="text-wechat-green" />}
-        <span>{toastMessage}</span>
-        <button onClick={clearToast} className="ml-2 p-0.5 hover:bg-gray-100 rounded">
-          <X size={14} />
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
+      <div
+        className={`pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-xl border backdrop-blur-md ${
+          exiting ? 'toast-exit' : 'toast-enter'
+        }`}
+        style={{
+          background: 'rgba(30, 30, 30, 0.94)',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.1)',
+        }}
+      >
+        {isError ? (
+          <AlertCircle size={15} className="text-wechat-danger flex-shrink-0" />
+        ) : (
+          <CheckCircle size={15} className="text-wechat-green flex-shrink-0" />
+        )}
+        <span className="text-[13px] text-white/90 font-medium leading-snug">
+          {toastMessage}
+        </span>
+        <button
+          onClick={() => { setExiting(true); setTimeout(clearToast, 200); }}
+          className="flex-shrink-0 p-0.5 rounded-full hover:bg-white/10 transition-colors duration-150 ml-1"
+        >
+          <X size={12} className="text-white/40" />
         </button>
       </div>
     </div>

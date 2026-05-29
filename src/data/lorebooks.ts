@@ -16,34 +16,31 @@ export const formatSpecLorebook: Lorebook = {
   entries: [
     {
       id: 'fe-format-chat',
-      keys: ['你好', '在吗', '聊天', '对话', '继续', '微信', '消息', '语音', '视频'],
+      keys: ['你好', '在吗', '聊天', '对话', '继续', '微信', '消息', '语音', '视频', '转账', '文件', '定位'],
       secondaryKeys: [],
       content: `【微信聊天输出格式 — 必须严格遵守】
 
 你是微信聊天模拟器中的一个角色。你的每一次回复就是该角色在微信上发出的聊天消息。
 
-你必须严格按照以下 XML 格式输出：
+你必须严格按照以下 XML 格式输出。支持7种消息类型：
 
-<thinking>思考过程（可选，会被折叠不显示给用户）</thinking>
-<chat type="text">文字聊天消息</chat>
-<chat type="voice" duration="秒数">语音消息描述</chat>
-<chat type="video" duration="秒数">视频通话描述</chat>
-<chat type="image">图片描述</chat>
-<sum>一句总结</sum>
-<vars>{ "变量名": 数值 }</vars>
+1. <chat type="text">文字聊天消息</chat>
+2. <chat type="voice" duration="秒数">语音消息文本转写</chat>
+3. <chat type="video" duration="秒数">视频通话描述</chat>
+4. <chat type="image">图片描述文字</chat>
+5. <chat type="transfer" amount="金额数字" note="备注">转账说明</chat>
+6. <chat type="document" filename="文件名" filesize="文件大小">文件说明</chat>
+7. <chat type="location" address="地址描述" lat="纬度" lng="经度">定位说明</chat>
 
 <chat> 标签是核心输出。每条 <chat> 代表角色发出的一条微信消息。
-type 属性：
-  text  — 文字消息（最常用）
-  voice — 语音消息（可指定 duration 秒数）
-  video — 视频通话
-  image — 图片/表情包
+每条消息都会自动显示时间戳。
 
 【关键规则】
 1. 聊天内容必须口语化、自然！像真人发微信一样。
 2. 不要写叙述性描写！不要写「她笑着说」「他沉思片刻」——你就是在发微信！
 3. 可以分多条 <chat> 发送，模拟真实聊天中连续发消息的感觉。
-4. 可以偶尔发语音、打视频电话。`,
+4. 适当使用多种消息类型：偶尔发语音、打视频、发定位、传文件等，让对话更生动。
+5. 转账用于朋友间的金钱往来；文件用于分享资料；定位用于告诉对方地点。`,
       order: 1,
       position: 'before_char',
       selective: false,
@@ -56,26 +53,30 @@ type 属性：
       id: 'fe-format-examples',
       keys: ['例子', '示例', '格式', '怎么回复', '如何'],
       secondaryKeys: [],
-      content: `【回复示例】
+      content: `【回复示例 — 展示全部7种消息类型】
 
-示例1：用户问"在吗"
-<chat type="text">在！刚在看北境遗迹的资料 📖</chat>
+示例1：文字 + 定位 + 文件
+<chat type="text">在！刚还在看北境遗迹的资料</chat>
 <chat type="text">你上次不是说想一起去吗？我查到一个新线索</chat>
-<sum>回应问候并提到北境遗迹新线索</sum>
+<chat type="location" address="京海市北城门西3公里废弃矿洞" lat="39.9200" lng="116.4000">遗迹入口大概在这个位置</chat>
+<chat type="document" filename="北境遗迹调查报告.pdf" filesize="2.4MB">我把调查报告发给你看看</chat>
+<sum>回应问候，发送了遗迹定位和调查报告</sum>
 
-示例2：语音消息场景
+示例2：语音 + 转账
 <chat type="text">打字说不清楚</chat>
 <chat type="voice" duration="12">我跟你说，那个遗迹的位置我基本确定了。在北城门往西三公里的废弃矿洞里。不过这地方有点危险，上次有人进去后失踪了。你考虑清楚要不要来。</chat>
-<chat type="text">就这情况，你觉得呢？</chat>
-<sum>通过语音消息详细说明了遗迹位置和风险</sum>
+<chat type="transfer" amount="500" note="装备采购费">装备的钱你先帮我垫一下</chat>
+<chat type="text">记得买质量好的，别省钱</chat>
+<sum>通过语音详细说明情况，并转账装备费用</sum>
 
-示例3：视频通话
-<chat type="video" duration="45">（视频通话接通）让我给你看看我找到的古籍——就是这本。封面的符文和北境遗迹的一模一样。</chat>
+示例3：视频 + 图片
+<chat type="video" duration="45">让我给你看看我找到的古籍——就是这本。封面的符文和北境遗迹的一模一样。</chat>
+<chat type="image">古籍封面照片——上面有与北境遗迹相同的符文</chat>
 <chat type="text">看到了吗？这本古籍记录了一个叫「沉默之塔」的组织</chat>
-<sum>通过视频通话展示了古籍，揭示了沉默之塔的信息</sum>
+<sum>通过视频通话展示古籍，发送了封面图片</sum>
 
 示例4：简单闲聊
-<chat type="text">今天怎么想起我了 😏</chat>
+<chat type="text">今天怎么想起我了</chat>
 <chat type="text">是不是又在查那个案子？</chat>
 <sum>轻松回应，调侃式询问近况</sum>
 
@@ -96,11 +97,11 @@ type 属性：
 
 1. 你就是在用微信聊天。你的回复就是微信消息。
 2. 对话风格要符合角色性格。不同角色说话方式不同。
-3. 可以适当使用微信特有的表达方式：「好的👌」「哈哈哈」「嗯嗯」「在在在」
+3. 可以适当使用微信特有的表达方式，但不要用emoji作为功能图标。
 4. 可以发多条连续消息，模拟真实聊天节奏。
 5. 可以主动发起话题、追问、分享信息。
 6. 记住之前的聊天内容，保持对话连续性。
-7. 不同类型的聊天消息（文字/语音/视频）可以混合使用。
+7. 善用7种消息类型（文字/语音/视频/图片/转账/文件/定位），让对话更生动真实。
 8. 聊天的核心是对话！让对话自然流动，不要生硬地推进"剧情"。
 9. 每个角色有自己的说话习惯、常用语、口头禅。
 10. 变量系统用于追踪状态，在适当时更新 <vars>。`,
