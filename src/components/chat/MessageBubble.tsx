@@ -2,10 +2,9 @@ import { useState, useMemo } from 'react';
 import type { ChatMessage, ChatEntry } from '../../types';
 import {
   ChevronDown, ChevronRight, Brain, Trash2,
-  Mic, Video, ImageIcon, MessageSquare,
+  Mic, Video, ImageIcon,
   DollarSign, FileText, MapPin,
-  Music, Play, Download, Navigation, Clock,
-  Wifi, RotateCcw, CheckCheck,
+  Music, Download, Navigation,
 } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import Avatar from '../shared/Avatar';
@@ -32,9 +31,13 @@ export default function MessageBubble({
   const settings = useAppStore(s => s.settings);
 
   const timeStr = useMemo(() => formatMessageTime(message.timestamp), [message.timestamp]);
+  const parsed = message.parsed;
 
-  // ── USER MESSAGE (right side, green bubble) ──
+  // ── USER MESSAGE (right side) ──
   if (isUser) {
+    const userChats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
+    const hasTypedContent = userChats !== null && userChats.length > 0;
+
     return (
       <div
         className={`flex justify-end items-start mb-0 message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
@@ -42,15 +45,24 @@ export default function MessageBubble({
         onMouseLeave={() => setShowActions(false)}
       >
         <div className="max-w-[60%] group">
-          {!isConsecutive && (
+          {!isConsecutive && !hasTypedContent && (
             <div className="flex justify-end mb-1">
               <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
             </div>
           )}
-          <div className="chat-bubble-user">
-            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</p>
-            <span className="text-[10px] text-black/25 float-right mt-1 ml-2">已读</span>
-          </div>
+          {hasTypedContent ? (
+            /* Typed user message — use type-specific bubble styles on the right */
+            <div className="space-y-1.5">
+              {userChats!.map((chat, i) => (
+                <UserChatEntryBubble key={i} entry={chat} />
+              ))}
+            </div>
+          ) : (
+            /* Plain text user message */
+            <div className="chat-bubble-user">
+              <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</p>
+            </div>
+          )}
           {showActions && (
             <div className="flex justify-end gap-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               {onBacktrack && (
@@ -71,7 +83,6 @@ export default function MessageBubble({
   }
 
   // ── AI / Assistant message ──
-  const parsed = message.parsed;
   const hasThinking = parsed?.thinking && parsed.thinking.trim();
   const chats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
 
@@ -177,6 +188,30 @@ export function ChatEntryBubble({ entry, isConsecutive = false }: { entry: ChatE
     case 'text':
     default:
       return <TextBubble {...shared} />;
+  }
+}
+
+// ── User-side chat entry bubbles (right-aligned, green style) ──
+export function UserChatEntryBubble({ entry }: { entry: ChatEntry }) {
+  switch (entry.type) {
+    case 'voice':
+      return <UserVoiceBubble entry={entry} />;
+    case 'video':
+      return <UserVideoBubble entry={entry} />;
+    case 'image':
+      return <UserImageBubble entry={entry} />;
+    case 'transfer':
+      return <UserTransferBubble entry={entry} />;
+    case 'document':
+      return <UserDocumentBubble entry={entry} />;
+    case 'location':
+      return <UserLocationBubble entry={entry} />;
+    default:
+      return (
+        <div className="chat-bubble-user">
+          <p className="whitespace-pre-wrap leading-relaxed text-[15px]">{entry.content}</p>
+        </div>
+      );
   }
 }
 
@@ -554,6 +589,129 @@ function LocationBubble({ entry, isConsecutive }: { entry: ChatEntry; isConsecut
         {entry.content && entry.address && entry.content !== entry.address && (
           <p className="text-[11px] text-wechat-text-light/60 mt-0.5">{entry.content}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// User-side Typed Bubbles (right-aligned, green style)
+// ═══════════════════════════════════════
+
+function UserVoiceBubble({ entry }: { entry: ChatEntry }) {
+  return (
+    <div className="chat-bubble-user">
+      <div className="flex items-center gap-3">
+        {/* Waveform */}
+        <div className="flex items-end gap-[2px] h-5">
+          {[3, 2, 4, 1.5, 3.5, 2.5].map((h, i) => (
+            <span key={i} className="w-[2.5px] rounded-full bg-black/25"
+              style={{ height: `${h * 2.5}px` }} />
+          ))}
+        </div>
+        {entry.duration && (
+          <span className="text-[11px] text-black/40 font-medium tabular-nums">{entry.duration}"</span>
+        )}
+        <p className="text-[14px] leading-relaxed line-clamp-2 flex-1">{entry.content || '语音消息'}</p>
+        <Mic size={14} className="text-black/30 flex-shrink-0" />
+      </div>
+      {entry.time && <span className="text-[9px] text-black/25 float-right mt-0.5">{entry.time}</span>}
+    </div>
+  );
+}
+
+function UserVideoBubble({ entry }: { entry: ChatEntry }) {
+  return (
+    <div className="chat-bubble-user">
+      <div className="flex items-center gap-3">
+        <Video size={14} className="text-black/40 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <span className="text-[13px] font-semibold">视频通话</span>
+          <p className="text-[12px] line-clamp-1">{entry.content || '点击回拨'}</p>
+        </div>
+        {entry.duration ? (
+          <span className="text-[10px] text-black/40 tabular-nums">{formatDuration(entry.duration)}</span>
+        ) : (
+          <span className="text-[10px] text-black/30">已取消</span>
+        )}
+      </div>
+      {entry.time && <span className="text-[9px] text-black/25 float-right mt-0.5">{entry.time}</span>}
+    </div>
+  );
+}
+
+function UserImageBubble({ entry }: { entry: ChatEntry }) {
+  return (
+    <div className="chat-bubble-user">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ImageIcon size={14} className="text-black/30 flex-shrink-0" />
+          <p className="text-[14px] leading-relaxed">{entry.content || '[图片]'}</p>
+        </div>
+        {entry.time && <span className="text-[9px] text-black/25 flex-shrink-0 mt-0.5">{entry.time}</span>}
+      </div>
+    </div>
+  );
+}
+
+function UserTransferBubble({ entry }: { entry: ChatEntry }) {
+  return (
+    <div className="chat-bubble-user"
+      style={{ background: 'linear-gradient(135deg, #FF6B35 0%, #F56C2D 50%, #E0481B 100%)' }}>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 border border-white/30">
+          <DollarSign size={14} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] text-white/80 font-medium">转账</p>
+          {entry.amount !== undefined && (
+            <p className="text-[18px] font-bold text-white tracking-tight leading-tight tabular-nums">
+              ¥{entry.amount.toFixed(2)}
+            </p>
+          )}
+          {entry.transferNote && (
+            <p className="text-[11px] text-white/70 mt-0.5 truncate">{entry.transferNote}</p>
+          )}
+        </div>
+        <ChevronRight size={14} className="text-white/60 flex-shrink-0" />
+      </div>
+      {entry.time && <span className="text-[9px] text-white/40 float-right mt-0.5">{entry.time}</span>}
+    </div>
+  );
+}
+
+function UserDocumentBubble({ entry }: { entry: ChatEntry }) {
+  return (
+    <div className="chat-bubble-user">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-black/10 flex items-center justify-center flex-shrink-0">
+          <FileText size={16} className="text-black/40" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium truncate">{entry.fileName || '未命名文件'}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {entry.fileSize && <span className="text-[10px] text-black/30">{entry.fileSize}</span>}
+            {entry.time && <span className="text-[10px] text-black/25">{entry.time}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserLocationBubble({ entry }: { entry: ChatEntry }) {
+  return (
+    <div className="chat-bubble-user">
+      <div className="flex items-center gap-3">
+        <MapPin size={16} className="text-wechat-danger flex-shrink-0" fill="#FA5151" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <Navigation size={9} className="text-black/30 flex-shrink-0" />
+            <span className="text-[10px] text-black/40">位置</span>
+          </div>
+          <p className="text-[14px] leading-snug mt-0.5">{entry.address || entry.content || '共享位置'}</p>
+        </div>
+        {entry.time && <span className="text-[9px] text-black/25 flex-shrink-0 self-end">{entry.time}</span>}
       </div>
     </div>
   );

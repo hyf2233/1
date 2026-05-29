@@ -5,7 +5,7 @@ import type { AppSettings, ChatPreset, Lorebook, LorebookEntry, ChatEntry } from
 import { DEFAULT_SETTINGS, createDefaultPreset, DEFAULT_FORMAT_PROMPT } from '../sillytavern/types';
 import { assemblePrompt } from '../sillytavern/prompt-assembler';
 import { createLorebookEngine } from '../sillytavern/lorebook-engine';
-import { createDefaultEntry } from '../sillytavern/editor-utils';
+import { createDefaultEntry, chatEntriesToXml, parseChatEntriesFromXml } from '../sillytavern/editor-utils';
 import { StreamTagParser } from '../sillytavern/stream-parser';
 import { aggregateEvents } from '../sillytavern/variables';
 import { DEFAULT_TAGS, DEFAULT_OPAQUE_TAGS } from '../sillytavern/types';
@@ -29,7 +29,7 @@ interface AppState {
   activeChatId: string | null;
   activeChat: () => ChatSession | null;
   setActiveChat: (id: string | null) => void;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, chatEntryOverride?: ChatEntry) => Promise<void>;
   isStreaming: boolean;
   streamedText: string;
   streamedChats: ChatEntry[];
@@ -137,7 +137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   streamedChats: [],
   currentOptions: [],
 
-  sendMessage: async (content: string) => {
+  sendMessage: async (content: string, chatEntryOverride?: ChatEntry) => {
     const chat = get().activeChat();
     if (!chat) return;
     const { settings, presets, activePresetId, lorebooks, activeLorebookIds, contacts } = get();
@@ -149,12 +149,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     const activeLorebooks = lorebooks.filter(lb => activeLorebookIds.includes(lb.id));
     const presetSettings = activePreset.settings;
 
+    // Build user message — support typed messages via chatEntryOverride
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content,
+      content: chatEntryOverride ? chatEntryOverride.content : content,
       timestamp: Date.now(),
     };
+
+    // If user sent a typed message (voice, video, etc.), store parsed.chats
+    if (chatEntryOverride && chatEntryOverride.type !== 'text') {
+      userMsg.parsed = {
+        thinking: '',
+        maintext: content,
+        options: [],
+        chats: [chatEntryOverride],
+        sum: '',
+        varsRaw: '',
+        varsCommands: { merge: get().gameState },
+        unknown: {},
+      };
+    }
 
     const updatedChat = {
       ...chat,
@@ -661,27 +676,10 @@ function messageToLorebookEntry(
   // Build header with metadata
   const header = `【${roleEmoji} ${roleName} · ${timeStr}】`;
 
-  // Store message type info for chats (from parsed.chats or as plain text)
+  // Store chat entries as re-parseable XML so types survive lorebook roundtrip
   let contentBody = msg.content;
   if (msg.parsed?.chats && msg.parsed.chats.length > 0) {
-    contentBody = msg.parsed.chats.map(c => {
-      switch (c.type) {
-        case 'voice':
-          return `[语音消息]${c.duration ? ` (${c.duration}秒)` : ''} ${c.content}`;
-        case 'video':
-          return `[视频通话]${c.duration ? ` (${c.duration}秒)` : ''} ${c.content}`;
-        case 'image':
-          return `[图片] ${c.content}`;
-        case 'transfer':
-          return `[转账] ¥${c.amount || 0}${c.transferNote ? ` — ${c.transferNote}` : ''} ${c.content}`;
-        case 'document':
-          return `[文件] ${c.fileName || '未知文件'}${c.fileSize ? ` (${c.fileSize})` : ''} ${c.content}`;
-        case 'location':
-          return `[定位] ${c.address || c.content}`;
-        default:
-          return c.content;
-      }
-    }).join('\n');
+    contentBody = chatEntriesToXml(msg.parsed.chats, '\n');
   }
 
   const entry = createDefaultEntry();
@@ -728,48 +726,100 @@ function rebuildChatFromLorebook(
       if (msgId) {
         // This entry is linked to a specific chat message
         const existingMsg = chat.messages.find(m => m.id === msgId);
-        const content = extractBodyFromEntry(entry);
+        const body = extractBodyFromEntry(entry);
         const role = extractRoleFromEntry(entry);
+        // Try to parse XML chat entries from the body
+        const parsedChats = parseChatEntriesFromXml(body);
 
         if (existingMsg) {
-          // Update existing message (preserve parsed data if content unchanged)
-          if (existingMsg.content !== content || existingMsg.role !== role) {
-            rebuiltMessages.push({ ...existingMsg, content, role });
+          const updated: ChatMessage = { ...existingMsg, role };
+          if (parsedChats.length > 0) {
+            updated.content = parsedChats.map(c => c.content).join('\n');
+            updated.parsed = {
+              thinking: existingMsg.parsed?.thinking || '',
+              maintext: updated.content,
+              options: [],
+              chats: parsedChats,
+              sum: existingMsg.parsed?.sum || '',
+              varsRaw: existingMsg.parsed?.varsRaw || '',
+              varsCommands: existingMsg.parsed?.varsCommands || { merge: {} },
+              unknown: existingMsg.parsed?.unknown || {},
+            };
           } else {
-            rebuiltMessages.push(existingMsg);
+            updated.content = body;
           }
+          rebuiltMessages.push(updated);
         } else {
-          // This message was deleted from chat but exists in lorebook → restore it
-          rebuiltMessages.push({
+          // Restore from lorebook
+          const restored: ChatMessage = {
             id: msgId,
             role,
-            content,
+            content: parsedChats.length > 0 ? parsedChats.map(c => c.content).join('\n') : body,
             timestamp: entry.order || Date.now(),
-          });
+          };
+          if (parsedChats.length > 0) {
+            restored.parsed = {
+              thinking: '',
+              maintext: restored.content,
+              options: [],
+              chats: parsedChats,
+              sum: '',
+              varsRaw: '',
+              varsCommands: { merge: {} },
+              unknown: {},
+            };
+          }
+          rebuiltMessages.push(restored);
         }
         seenIds.add(msgId);
       } else {
         // Manual entry (no comment) → create as new assistant message
-        const newId = entry.id; // Use entry's own ID
-        if (seenIds.has(newId)) continue; // Avoid duplicates within same rebuild
+        const newId = entry.id;
+        if (seenIds.has(newId)) continue;
         seenIds.add(newId);
 
-        // Check if already exists in chat
+        const body = extractBodyFromEntry(entry);
+        const parsedChats = parseChatEntriesFromXml(body);
+
         const existing = chat.messages.find(m => m.id === newId);
         if (existing) {
-          const content = extractBodyFromEntry(entry);
-          if (existing.content !== content) {
-            rebuiltMessages.push({ ...existing, content });
+          const updated: ChatMessage = { ...existing };
+          if (parsedChats.length > 0) {
+            updated.content = parsedChats.map(c => c.content).join('\n');
+            updated.parsed = {
+              thinking: existing.parsed?.thinking || '',
+              maintext: updated.content,
+              options: [],
+              chats: parsedChats,
+              sum: existing.parsed?.sum || '',
+              varsRaw: existing.parsed?.varsRaw || '',
+              varsCommands: existing.parsed?.varsCommands || { merge: {} },
+              unknown: existing.parsed?.unknown || {},
+            };
           } else {
-            rebuiltMessages.push(existing);
+            updated.content = body;
           }
+          rebuiltMessages.push(updated);
         } else {
-          rebuiltMessages.push({
+          const newMsg: ChatMessage = {
             id: newId,
             role: 'assistant',
-            content: extractBodyFromEntry(entry),
+            content: parsedChats.length > 0 ? parsedChats.map(c => c.content).join('\n') : body,
             timestamp: entry.order || Date.now(),
-          });
+          };
+          if (parsedChats.length > 0) {
+            newMsg.parsed = {
+              thinking: '',
+              maintext: newMsg.content,
+              options: [],
+              chats: parsedChats,
+              sum: '',
+              varsRaw: '',
+              varsCommands: { merge: {} },
+              unknown: {},
+            };
+          }
+          rebuiltMessages.push(newMsg);
         }
       }
     }
