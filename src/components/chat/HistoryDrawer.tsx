@@ -6,8 +6,8 @@ import {
   MessageSquare, Mic, Video, ImageIcon,
   DollarSign, FileText, MapPin,
 } from 'lucide-react';
-import { createDefaultEntry } from '../../sillytavern/editor-utils';
-import type { ChatEntryType } from '../../sillytavern/types';
+import { createDefaultEntry, chatEntryToXml } from '../../sillytavern/editor-utils';
+import type { ChatEntryType, ChatEntry } from '../../sillytavern/types';
 
 interface TypeOption {
   type: ChatEntryType;
@@ -51,6 +51,10 @@ export default function HistoryDrawer() {
   const [addFileName, setAddFileName] = useState('');
   const [addFileSize, setAddFileSize] = useState('');
   const [addAddress, setAddAddress] = useState('');
+  const [addTime, setAddTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
 
   if (!chat) return null;
 
@@ -76,43 +80,31 @@ export default function HistoryDrawer() {
     if (!addContent.trim()) return;
     if (!historyBook) return;
 
-    const roleEmoji = ''; // No emoji, using icons in UI instead
-    const roleName = addRole === 'user' ? userName : characterName;
-    const timeStr = new Date().toLocaleString('zh-CN');
-    const header = `【${addRole === 'user' ? '用户' : 'AI'} ${roleName} · ${timeStr}】`;
+    const isUser = addRole === 'user';
+    const roleName = isUser ? userName : characterName;
+    const roleEmoji = isUser ? '👤' : '🤖';
+    const now = new Date();
+    const timeStr = now.toLocaleString('zh-CN');
+    const header = `【${roleEmoji} ${roleName} · ${timeStr}】`;
 
-    // Build content body with type tags
-    let contentBody: string;
-    switch (addType) {
-      case 'voice':
-        contentBody = `[语音消息]${addDuration ? ` (${addDuration}秒)` : ''} ${addContent.trim()}`;
-        break;
-      case 'video':
-        contentBody = `[视频通话]${addDuration ? ` (${addDuration}秒)` : ''} ${addContent.trim()}`;
-        break;
-      case 'image':
-        contentBody = `[图片] ${addContent.trim()}`;
-        break;
-      case 'transfer':
-        contentBody = `[转账] ¥${addAmount || 0}${addNote ? ` — ${addNote}` : ''} ${addContent.trim()}`;
-        break;
-      case 'document':
-        contentBody = `[文件] ${addFileName || '未知文件'}${addFileSize ? ` (${addFileSize})` : ''} ${addContent.trim()}`;
-        break;
-      case 'location':
-        contentBody = `[定位] ${addAddress || addContent.trim()}`;
-        break;
-      default:
-        contentBody = addContent.trim();
-    }
+    // Build ChatEntry object from form fields
+    const chatEntry: ChatEntry = {
+      type: addType,
+      content: addContent.trim(),
+      time: addTime || undefined,
+      duration: addDuration ? Number(addDuration) : undefined,
+      amount: addAmount ? Number(addAmount) : undefined,
+      transferNote: addNote || undefined,
+      fileName: addFileName || undefined,
+      fileSize: addFileSize || undefined,
+      address: addAddress || undefined,
+    };
+
+    // Generate proper XML using chatEntryToXml (same format as auto-generated entries)
+    const contentBody = chatEntryToXml(chatEntry);
 
     const entry = createDefaultEntry();
-    entry.keys = [
-      roleName,
-      addRole === 'user' ? 'role-user' : 'role-assistant',
-      '对话', '聊天记录', '历史', '手动添加',
-      `type-${addType}`,
-    ];
+    entry.keys = [roleName];
     entry.content = `${header}\n${contentBody}`;
     entry.order = Date.now();
     entry.constant = true;
@@ -136,6 +128,8 @@ export default function HistoryDrawer() {
     setAddFileName('');
     setAddFileSize('');
     setAddAddress('');
+    const now = new Date();
+    setAddTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
     setAddType('text');
     setAddRole('assistant');
     setShowAddForm(false);
@@ -153,7 +147,7 @@ export default function HistoryDrawer() {
             <div>
               <p className="text-[13px] text-wechat-green font-semibold">对话保存于世界书</p>
               <p className="text-[11px] text-wechat-text-gray mt-1 leading-relaxed">
-                所有对话自动同步到世界书「{historyBook?.name || `对话记录 - ${characterName}`}」。AI 可读取这些记录作为上下文。
+                所有对话自动同步到世界书「{historyBook?.name || `聊天记录-${characterName}`}」。AI 可读取这些记录作为上下文。
               </p>
             </div>
           </div>
@@ -227,6 +221,17 @@ export default function HistoryDrawer() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Time input */}
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-wechat-text-gray w-8">时间</span>
+              <input
+                type="text" placeholder="14:30"
+                value={addTime} onChange={e => setAddTime(e.target.value)}
+                className="w-24 px-2.5 py-1.5 bg-white rounded-lg text-[13px] outline-none border border-gray-200 focus:border-wechat-green focus:ring-1 focus:ring-wechat-green/20 transition-all"
+              />
+              <span className="text-[11px] text-wechat-text-light">HH:MM</span>
             </div>
 
             {/* Type-specific fields */}
@@ -370,7 +375,7 @@ export default function HistoryDrawer() {
         {/* Footer */}
         <div className="mt-3 pt-3 border-t border-gray-100 flex-shrink-0">
           <p className="text-[11px] text-wechat-text-light/60 leading-relaxed">
-            前往 <span className="text-wechat-green font-semibold">我 → 世界书管理</span> 编辑「{historyBook?.name || `对话记录 - ${characterName}`}」可实时修改聊天内容
+            前往 <span className="text-wechat-green font-semibold">我 → 世界书管理</span> 编辑「{historyBook?.name || `聊天记录-${characterName}`}」可实时修改聊天内容
           </p>
         </div>
       </div>

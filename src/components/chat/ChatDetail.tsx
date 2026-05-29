@@ -14,6 +14,7 @@ function stripXmlTags(text: string): string {
 export default function ChatDetail() {
   const activeChat = useAppStore(s => s.activeChat);
   const contacts = useAppStore(s => s.contacts);
+  const settings = useAppStore(s => s.settings);
   const isStreaming = useAppStore(s => s.isStreaming);
   const streamedText = useAppStore(s => s.streamedText);
   const streamedChats = useAppStore(s => s.streamedChats);
@@ -24,6 +25,9 @@ export default function ChatDetail() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const contact = chat ? contacts.find(c => c.id === chat.contactId) : null;
+  const userName = settings.userName || '用户';
+  const userAvatarGradient = 'linear-gradient(135deg, #07C160 0%, #06AD56 100%)';
+  const userAvatarSrc = settings.userAvatar || undefined;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -79,15 +83,14 @@ export default function ChatDetail() {
         {chat.messages.map((msg, idx, arr) => {
           const prevMsg = idx > 0 ? arr[idx - 1] : null;
           const isConsecutive = prevMsg?.role === msg.role;
-          const showAvatar = msg.role === 'assistant' && !isConsecutive;
           return (
             <MessageBubble
               key={msg.id}
               message={msg}
-              avatarSrc={aiAvatarSrc}
-              avatarName={contact.name}
-              avatarGradient={contact.avatar}
-              showAvatar={showAvatar}
+              avatarSrc={msg.role === 'assistant' ? aiAvatarSrc : userAvatarSrc}
+              avatarName={msg.role === 'assistant' ? contact.name : userName}
+              avatarGradient={msg.role === 'assistant' ? contact.avatar : userAvatarGradient}
+              showAvatar={true}
               isConsecutive={isConsecutive}
               onBacktrack={msg.role === 'user' ? () => backtrackTo(msg.id) : undefined}
               onDelete={() => handleDelete(msg.id)}

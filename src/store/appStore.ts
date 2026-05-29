@@ -112,7 +112,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         );
         const newBook: Lorebook = {
           id: historyBookId,
-          name: `💬 对话记录 - ${charName}`,
+          name: `聊天记录-${charName}`,
           description: `与「${charName}」的完整对话记录。AI 会读取这些记录来了解对话历史。`,
           recursiveScanning: false, caseSensitive: false, matchWholeWords: false,
           createdAt: Date.now(), updatedAt: Date.now(),
@@ -628,7 +628,7 @@ function finalizeAndSync(
   } else {
     historyBook = {
       id: historyBookId,
-      name: `💬 对话记录 - ${charName}`,
+      name: `聊天记录-${charName}`,
       description: `与「${charName}」的完整对话记录。这些条目会自动提供给 AI 作为上下文。你可以编辑、删除或手动添加条目，修改会实时反映到聊天界面。`,
       recursiveScanning: false,
       caseSensitive: false,
@@ -697,11 +697,7 @@ function messageToLorebookEntry(
 
   const entry = createDefaultEntry();
   entry.id = `he-${msg.id}`;
-  entry.keys = [
-    roleName,
-    isUser ? 'role-user' : 'role-assistant',
-    '对话', '聊天记录', '历史',
-  ];
+  entry.keys = [roleName];
   entry.content = `${header}\n${contentBody}`;
   entry.comment = msg.id;  // Links to chat message ID
   entry.order = msg.timestamp;
@@ -786,17 +782,18 @@ function rebuildChatFromLorebook(
         }
         seenIds.add(msgId);
       } else {
-        // Manual entry (no comment) → create as new assistant message
+        // Manual entry (no comment) → derive role from content header
         const newId = entry.id;
         if (seenIds.has(newId)) continue;
         seenIds.add(newId);
 
         const body = extractBodyFromEntry(entry);
+        const role = extractRoleFromEntry(entry);
         const parsedChats = parseChatEntriesFromXml(body);
 
         const existing = chat.messages.find(m => m.id === newId);
         if (existing) {
-          const updated: ChatMessage = { ...existing };
+          const updated: ChatMessage = { ...existing, role };
           if (parsedChats.length > 0) {
             updated.content = parsedChats.map(c => c.content).join('\n');
             updated.parsed = {
@@ -816,7 +813,7 @@ function rebuildChatFromLorebook(
         } else {
           const newMsg: ChatMessage = {
             id: newId,
-            role: 'assistant',
+            role,
             content: parsedChats.length > 0 ? parsedChats.map(c => c.content).join('\n') : body,
             timestamp: entry.order || Date.now(),
           };
@@ -858,9 +855,11 @@ function extractBodyFromEntry(entry: LorebookEntry): string {
   return entry.content.trim();
 }
 
-/** Extract message role from lorebook entry keys */
+/** Extract message role from lorebook entry content header */
 function extractRoleFromEntry(entry: LorebookEntry): 'user' | 'assistant' {
-  return entry.keys.includes('role-user') ? 'user' : 'assistant';
+  // Parse the header emoji: 【👤 ...】 = user, 【🤖 ...】 = assistant
+  if (entry.content.startsWith('【👤')) return 'user';
+  return 'assistant';
 }
 
 // ========== Tavern-style Fallback Reply ==========

@@ -52,14 +52,15 @@ export default function MessageBubble({
 
     return (
       <div
-        className={`flex justify-end items-start mb-0 message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
+        className={`flex justify-end items-start gap-2.5 mb-0 message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
         <div className="max-w-[60%] group">
-          {!isConsecutive && !hasTypedContent && (
-            <div className="flex justify-end mb-1">
+          {showAvatar && (
+            <div className="flex justify-end items-center gap-2 mb-1">
               <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+              <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || '我'}</span>
             </div>
           )}
           {hasTypedContent ? (
@@ -88,6 +89,17 @@ export default function MessageBubble({
                 </button>
               )}
             </div>
+          )}
+        </div>
+        {/* User avatar on the right */}
+        <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
+          {showAvatar && (
+            <Avatar
+              size="sm"
+              name={avatarName || '我'}
+              gradient={avatarGradient || 'linear-gradient(135deg, #07C160, #06AD56)'}
+              src={avatarSrc}
+            />
           )}
         </div>
       </div>
