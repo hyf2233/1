@@ -132,7 +132,9 @@ export function assemblePrompt(options: AssembleOptions): AssembleResult {
     let content = replaceMacros(rawContent, { userName, characterName, userInput, variables });
     if (!content.trim()) continue;
 
-    const role = item.role || 'system';
+    // Role: from prompt_order > from matching prompt entry > default 'system'
+    const matchedPrompt = prompts.find(p => p.identifier === item.identifier);
+    const role = (item as any).role || matchedPrompt?.role || 'system';
     if (role === 'system') {
       systemAccumulator += (systemAccumulator ? '\n\n' : '') + content;
     } else {
