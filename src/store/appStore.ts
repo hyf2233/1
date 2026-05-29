@@ -22,6 +22,7 @@ interface AppState {
   // Contacts
   contacts: Contact[];
   getContact: (id: string) => Contact | undefined;
+  updateContact: (id: string, patch: Partial<Contact>) => void;
 
   // Chats
   chats: ChatSession[];
@@ -33,6 +34,7 @@ interface AppState {
   streamedText: string;
   currentOptions: string[];
   chooseOption: (option: string) => Promise<void>;
+  deleteMessage: (chatId: string, messageId: string) => void;
 
   // Moments
   moments: Moment[];
@@ -79,6 +81,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   contacts: presetContacts,
   getContact: (id) => get().contacts.find(c => c.id === id),
+  updateContact: (id, patch) => set(s => ({
+    contacts: s.contacts.map(c => c.id === id ? { ...c, ...patch } : c),
+  })),
 
   chats: presetChats,
   activeChatId: null,
@@ -214,6 +219,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   chooseOption: async (option: string) => {
     await get().sendMessage(option);
   },
+
+  deleteMessage: (chatId, messageId) => set(s => ({
+    chats: s.chats.map(c => c.id === chatId
+      ? { ...c, messages: c.messages.filter(m => m.id !== messageId), updatedAt: Date.now() }
+      : c
+    ),
+  })),
 
   moments: presetMoments,
   addMoment: (moment) => set(s => ({ moments: [moment, ...s.moments] })),
@@ -413,7 +425,9 @@ function parseApiResponse(raw: string): ApiReply {
 
   const maintext = chats.map(c => c.content).join('\n') || raw.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '').trim();
 
-  return { thinking, maintext, chats, sum, varsRaw };
+  // Strip sum and vars from maintext (they go to world book, not chat display)
+  const cleanMaintext = maintext.replace(/<sum>[^>]*[\s\S]*?<\/sum>/gi, '').replace(/<vars>[^>]*[\s\S]*?<\/vars>/gi, '').trim();
+  return { thinking, maintext: cleanMaintext, chats, sum, varsRaw };
 }
 
 function extractTag(text: string, tag: string): string | null {

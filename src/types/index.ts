@@ -12,8 +12,9 @@ export interface ChatSession extends STChatSession {
 export interface Contact {
   id: string;
   name: string;
-  avatar: string;
+  avatar: string;           // gradient string or image URL/base64
   avatarType: 'gradient' | 'image';
+  avatarImage?: string;     // base64 data URL for uploaded avatar
   bio?: string;
   phone?: string;
   tags?: string[];

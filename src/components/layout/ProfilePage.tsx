@@ -8,6 +8,8 @@ import PresetManager from '../preset/PresetManager';
 
 export default function ProfilePage() {
   const showToast = useAppStore(s => s.showToast);
+  const settings = useAppStore(s => s.settings);
+  const updateSettings = useAppStore(s => s.updateSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showLorebooks, setShowLorebooks] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
@@ -45,7 +47,13 @@ export default function ProfilePage() {
           <h1 className="text-title">我</h1>
         </div>
         <div className="flex items-center gap-4 px-4 py-6 cursor-pointer hover:bg-wechat-bg transition-colors">
-          <Avatar gradient="linear-gradient(135deg, #07c160, #06ad56)" name="我" size="xl" />
+          <Avatar
+            gradient="linear-gradient(135deg, #07c160, #06ad56)"
+            name={settings.userName || '我'}
+            size="xl"
+            src={settings.userAvatar}
+            onUpload={(dataUrl) => updateSettings({ ...settings, userAvatar: dataUrl })}
+          />
           <div className="flex-1">
             <h2 className="text-subtitle font-semibold">我的名字</h2>
             <p className="text-small text-wechat-text-gray mt-0.5">微信号: adventures_2026</p>

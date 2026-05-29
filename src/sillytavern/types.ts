@@ -166,6 +166,7 @@ export interface AppSettings {
   customTags: string[];
   formatPromptTemplate: string;
   thinkingDisplay: 'fold' | 'hide' | 'inline';
+  userAvatar?: string;  // base64 data URL for user avatar
 }
 
 export const DEFAULT_FORMAT_PROMPT = `你是微信聊天模拟器中的一个角色。你必须严格按照以下 XML 标签格式输出微信聊天消息，不要使用 Markdown。

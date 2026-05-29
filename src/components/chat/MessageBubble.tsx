@@ -1,103 +1,127 @@
 import { useState } from 'react';
 import type { ChatMessage } from '../../types';
-import { ChevronDown, ChevronRight, Brain, Phone, Mic, Image, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, Brain, Phone, Mic, Image, Trash2 } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
+import Avatar from '../shared/Avatar';
 
 interface Props {
   message: ChatMessage;
+  avatarSrc?: string;
+  avatarName?: string;
+  avatarGradient?: string;
   onBacktrack?: () => void;
+  onDelete?: () => void;
 }
 
-export default function MessageBubble({ message, onBacktrack }: Props) {
+export default function MessageBubble({ message, avatarSrc, avatarName, avatarGradient, onBacktrack, onDelete }: Props) {
   const isUser = message.role === 'user';
   const [thinkingOpen, setThinkingOpen] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+  const settings = useAppStore(s => s.settings);
+  const userAvatar = settings.userAvatar;
 
   if (isUser) {
     return (
-      <div className="flex justify-end mb-3 message-animate">
+      <div className="flex justify-end items-start gap-2 mb-3 message-animate px-4"
+           onMouseEnter={() => setShowActions(true)} onMouseLeave={() => setShowActions(false)}>
         <div className="max-w-[65%]">
-          <div className="chat-bubble-user group relative">
-            <p className="whitespace-pre-wrap">{message.content}</p>
-            {onBacktrack && (
-              <button
-                onClick={onBacktrack}
-                className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded"
-                title="回溯到此消息"
-                id={`backtrack-${message.id}`}
-              >
-                <span className="text-wechat-text-light text-small">↩</span>
-              </button>
-            )}
+          <div className="chat-bubble-user relative">
+            <p className="whitespace-pre-wrap text-body">{message.content}</p>
           </div>
+          {showActions && (
+            <div className="flex justify-end gap-1 mt-0.5">
+              {onBacktrack && (
+                <button onClick={onBacktrack} className="text-small text-wechat-text-light hover:text-wechat-green transition-colors">↩ 回溯</button>
+              )}
+              {onDelete && (
+                <button onClick={onDelete} className="text-small text-wechat-text-light hover:text-wechat-danger transition-colors">删除</button>
+              )}
+            </div>
+          )}
         </div>
+        {/* User avatar — right side */}
+        <Avatar
+          size="sm"
+          name={settings.userName || '我'}
+          gradient="linear-gradient(135deg, #07c160, #06ad56)"
+          src={userAvatar}
+        />
       </div>
     );
   }
 
-  // Assistant — render chat-style messages
+  // Assistant message
   const parsed = message.parsed;
   const hasThinking = parsed?.thinking && parsed.thinking.trim();
   const chats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
-  const hasSum = parsed?.sum && parsed.sum.trim();
 
   return (
-    <div className="flex justify-start mb-3 message-animate">
-      <div className="max-w-[80%]">
-        <div className="space-y-1.5">
+    <div className="flex justify-start items-start gap-2 mb-3 message-animate px-4"
+         onMouseEnter={() => setShowActions(true)} onMouseLeave={() => setShowActions(false)}>
+      {/* AI avatar — left side */}
+      <Avatar
+        size="sm"
+        name={avatarName || 'AI'}
+        gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
+        src={avatarSrc}
+      />
+
+      <div className="max-w-[75%]">
+        <div className="space-y-1">
           {/* Thinking fold */}
           {hasThinking && (
             <div className="mb-1">
               <button
                 id={`thinking-toggle-${message.id}`}
                 onClick={() => setThinkingOpen(!thinkingOpen)}
-                className="flex items-center gap-1.5 text-small text-wechat-text-gray hover:text-wechat-green transition-colors"
+                className="flex items-center gap-1 text-small text-wechat-text-gray hover:text-wechat-green transition-colors"
               >
-                <Brain size={12} />
-                <span className="font-medium">思考过程</span>
-                {thinkingOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                <Brain size={11} />
+                <span>思考过程</span>
+                {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
               </button>
               {thinkingOpen && (
-                <div className="mt-1.5 p-2.5 bg-gray-50 rounded-md text-small text-wechat-text-gray leading-relaxed border-l-2 border-wechat-green">
+                <div className="mt-1 p-2 bg-gray-50 rounded text-small text-wechat-text-gray leading-relaxed border-l-2 border-wechat-green">
                   {parsed!.thinking}
                 </div>
               )}
             </div>
           )}
 
-          {/* Chat messages — rendered as WeChat-style bubbles */}
+          {/* Chat messages — each one is a separate WeChat bubble */}
           {chats ? (
             chats.map((chat, i) => (
               <ChatBubble key={i} chat={chat} />
             ))
           ) : (
             <div className="chat-bubble-other">
-              <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-            </div>
-          )}
-
-          {/* Summary line */}
-          {hasSum && (
-            <div className="flex items-start gap-1.5 pt-1">
-              <FileText size={11} className="text-wechat-text-light mt-0.5 flex-shrink-0" />
-              <p className="text-small text-wechat-text-light">{parsed!.sum}</p>
+              <p className="whitespace-pre-wrap leading-relaxed text-body">{message.content}</p>
             </div>
           )}
         </div>
+
+        {/* Actions on hover */}
+        {showActions && onDelete && (
+          <div className="flex gap-1 mt-0.5 ml-0">
+            <button onClick={onDelete} className="text-small text-wechat-text-light hover:text-wechat-danger transition-colors flex items-center gap-0.5">
+              <Trash2 size={10} /> 删除
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** Render a single chat entry as a WeChat-style message */
+/** Render a single chat entry as a WeChat bubble */
 function ChatBubble({ chat }: { chat: { type: string; content: string; duration?: number } }) {
   switch (chat.type) {
     case 'voice':
       return (
         <div className="chat-bubble-other flex items-center gap-2">
           <Mic size={14} className="text-wechat-text-gray flex-shrink-0" />
-          <span className="text-body">{chat.content || '语音消息'}</span>
-          {chat.duration && (
-            <span className="text-small text-wechat-text-light flex-shrink-0">{chat.duration}"</span>
-          )}
+          <span className="text-body flex-1">{chat.content || '语音消息'}</span>
+          {chat.duration && <span className="text-small text-wechat-text-light">{chat.duration}"</span>}
         </div>
       );
 
@@ -126,7 +150,7 @@ function ChatBubble({ chat }: { chat: { type: string; content: string; duration?
     default:
       return (
         <div className="chat-bubble-other">
-          <p className="whitespace-pre-wrap leading-relaxed">{chat.content}</p>
+          <p className="whitespace-pre-wrap leading-relaxed text-body">{chat.content}</p>
         </div>
       );
   }

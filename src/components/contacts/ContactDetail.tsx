@@ -9,6 +9,7 @@ export default function ContactDetail({ contact, onClose }: Props) {
   const chats = useAppStore(s => s.chats);
   const setActiveChat = useAppStore(s => s.setActiveChat);
   const setActiveTab = useAppStore(s => s.setActiveTab);
+  const updateContact = useAppStore(s => s.updateContact);
 
   const handleSendMsg = () => {
     const chat = chats.find(c => c.contactId === contact.id);
@@ -21,7 +22,13 @@ export default function ContactDetail({ contact, onClose }: Props) {
 
   return (
     <div className="flex flex-col items-center text-center">
-      <Avatar gradient={contact.avatar} name={contact.name} size="xl" />
+      <Avatar
+        gradient={contact.avatar}
+        name={contact.name}
+        size="xl"
+        src={contact.avatarType === 'image' ? contact.avatarImage : undefined}
+        onUpload={(dataUrl) => updateContact(contact.id, { avatarType: 'image', avatarImage: dataUrl })}
+      />
       <h3 className="text-subtitle font-semibold mt-4">{contact.name}</h3>
       <p className="text-small text-wechat-text-gray mt-1">{contact.bio}</p>
       {contact.tags && (
