@@ -515,11 +515,11 @@ async function callRealApi(
     messages,
     stream,
   };
-  if (presetSettings.temp_openai !== undefined) body.temperature = presetSettings.temp_openai;
+  if (presetSettings.temperature !== undefined) body.temperature = presetSettings.temperature;
   if (presetSettings.openai_max_tokens) body.max_tokens = presetSettings.openai_max_tokens;
-  if (presetSettings.top_p_openai !== undefined) body.top_p = presetSettings.top_p_openai;
-  if (presetSettings.freq_pen_openai !== undefined) body.frequency_penalty = presetSettings.freq_pen_openai;
-  if (presetSettings.pres_pen_openai !== undefined) body.presence_penalty = presetSettings.pres_pen_openai;
+  if (presetSettings.top_p !== undefined) body.top_p = presetSettings.top_p;
+  if (presetSettings.frequency_penalty !== undefined) body.frequency_penalty = presetSettings.frequency_penalty;
+  if (presetSettings.presence_penalty !== undefined) body.presence_penalty = presetSettings.presence_penalty;
 
   const res = await fetch(url, {
     method: 'POST',

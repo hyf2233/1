@@ -146,13 +146,35 @@ export function exportLorebook(lorebook: Lorebook): SillyTavernLorebookExport {
   };
 }
 
-export function importPreset(data: Record<string, any>): Omit<ChatPreset, 'id' | 'createdAt' | 'updatedAt'> {
-  const name = data.preset || data.name || '导入的预设';
+export function importPreset(data: Record<string, any>, fileName?: string): Omit<ChatPreset, 'id' | 'createdAt' | 'updatedAt'> {
+  // Many ST presets have no name — use filename or fallback
+  const name = data.name || data.preset || data.preset_name || data.display_name
+    || (fileName ? fileName.replace(/\.json$/i, '') : null)
+    || '导入的预设';
   return {
     name,
-    description: data.description,
+    description: data.description || '',
     settings: data,
   };
+}
+
+export async function importJsonFileWithName<T>(): Promise<{ data: T; fileName: string } | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) { resolve(null); return; }
+      try {
+        const text = await file.text();
+        resolve({ data: JSON.parse(text) as T, fileName: file.name });
+      } catch {
+        resolve(null);
+      }
+    };
+    input.click();
+  });
 }
 
 export function exportPreset(preset: ChatPreset): Record<string, any> {
