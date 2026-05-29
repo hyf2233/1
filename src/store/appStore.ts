@@ -1,6 +1,8 @@
 // src/store/appStore.ts
 import { create } from 'zustand';
 import type { TabId, Contact, ChatSession, ChatMessage, Moment, BranchPoint } from '../types';
+import type { AppSettings, ChatPreset, Lorebook } from '../sillytavern/types';
+import { DEFAULT_SETTINGS, createDefaultPreset } from '../sillytavern/types';
 import { presetContacts } from '../data/contacts';
 import { presetMoments } from '../data/moments';
 import { presetChats } from '../data/chats';
@@ -42,6 +44,26 @@ interface AppState {
   toastMessage: string | null;
   showToast: (msg: string) => void;
   clearToast: () => void;
+
+  // SillyTavern Settings
+  settings: AppSettings;
+  updateSettings: (s: AppSettings) => void;
+
+  // SillyTavern Lorebooks
+  lorebooks: Lorebook[];
+  activeLorebookIds: string[];
+  addLorebook: (lb: Lorebook) => void;
+  removeLorebook: (id: string) => void;
+  toggleActiveLorebook: (id: string) => void;
+  updateLorebook: (lb: Lorebook) => void;
+
+  // SillyTavern Presets
+  presets: ChatPreset[];
+  activePresetId: string | null;
+  addPreset: (p: ChatPreset) => void;
+  removePreset: (id: string) => void;
+  setActivePreset: (id: string) => void;
+  updatePreset: (p: ChatPreset) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -156,6 +178,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   toastMessage: null,
   showToast: (msg) => set({ toastMessage: msg }),
   clearToast: () => set({ toastMessage: null }),
+
+  // SillyTavern Settings
+  settings: DEFAULT_SETTINGS,
+  updateSettings: (s) => set({ settings: s }),
+
+  // SillyTavern Lorebooks
+  lorebooks: [],
+  activeLorebookIds: [],
+  addLorebook: (lb) => set((st) => ({ lorebooks: [...st.lorebooks, lb] })),
+  removeLorebook: (id) => set((st) => ({ lorebooks: st.lorebooks.filter((b) => b.id !== id), activeLorebookIds: st.activeLorebookIds.filter((aid) => aid !== id) })),
+  toggleActiveLorebook: (id) => set((st) => ({
+    activeLorebookIds: st.activeLorebookIds.includes(id)
+      ? st.activeLorebookIds.filter((aid) => aid !== id)
+      : [...st.activeLorebookIds, id],
+  })),
+  updateLorebook: (lb) => set((st) => ({ lorebooks: st.lorebooks.map((b) => (b.id === lb.id ? lb : b)) })),
+
+  // SillyTavern Presets
+  presets: [{ ...createDefaultPreset(), id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() }],
+  activePresetId: null,
+  addPreset: (p) => set((st) => ({ presets: [...st.presets, p] })),
+  removePreset: (id) => set((st) => ({ presets: st.presets.filter((p) => p.id !== id), activePresetId: st.activePresetId === id ? null : st.activePresetId })),
+  setActivePreset: (id) => set({ activePresetId: id }),
+  updatePreset: (p) => set((st) => ({ presets: st.presets.map((pr) => (pr.id === p.id ? p : pr)) })),
 }));
 
 // Fake reply generator for prototyping
