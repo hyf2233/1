@@ -31,6 +31,7 @@ interface AppState {
   activeChatId: string | null;
   activeChat: () => ChatSession | null;
   setActiveChat: (id: string | null) => void;
+  getOrCreateChat: (contactId: string) => ChatSession;
   sendMessage: (content: string, chatEntryOverride?: ChatEntry) => Promise<void>;
   isStreaming: boolean;
   streamedText: string;
@@ -113,7 +114,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ activeChatId: null, showHistoryDrawer: false });
       return;
     }
-    // Ensure history lorebook exists for this chat
+    // ... existing setActiveChat logic
     const state = get();
     const chat = state.chats.find(c => c.id === id);
     if (chat) {
@@ -146,6 +147,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
     set({ activeChatId: id, showHistoryDrawer: false });
+  },
+
+  getOrCreateChat: (contactId) => {
+    const state = get();
+    const existing = state.chats.find(c => c.contactId === contactId);
+    if (existing) return existing;
+    const contact = state.contacts.find(c => c.id === contactId);
+    if (!contact) throw new Error(`Contact not found: ${contactId}`);
+    const newChat: ChatSession = {
+      id: `chat-${contactId}`,
+      contactId,
+      name: `${contact.name}`,
+      characterName: contact.name,
+      userName: state.settings.userName || '用户',
+      presetId: state.activePresetId,
+      lorebookIds: [...state.activeLorebookIds],
+      variables: {},
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    set(s => ({ chats: [...s.chats, newChat] }));
+    return newChat;
   },
 
   isStreaming: false,

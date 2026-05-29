@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import Avatar from '../shared/Avatar';
 import Modal from '../shared/Modal';
 import ContactDetail from './ContactDetail';
-import { Search, Send, Sparkles, UserPlus, X, Loader2 } from 'lucide-react';
+import { Search, Sparkles, UserPlus, X, Loader2, Info } from 'lucide-react';
 import { assemblePrompt } from '../../sillytavern/prompt-assembler';
 import type { Contact } from '../../types';
 
@@ -41,6 +41,9 @@ export default function ContactList() {
   const activeLorebookIds = useAppStore(s => s.activeLorebookIds);
   const addContact = useAppStore(s => s.addContact);
   const showToast = useAppStore(s => s.showToast);
+  const getOrCreateChat = useAppStore(s => s.getOrCreateChat);
+  const setActiveChat = useAppStore(s => s.setActiveChat);
+  const setActiveTab = useAppStore(s => s.setActiveTab);
 
   const [search, setSearch] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -127,6 +130,17 @@ export default function ContactList() {
     } finally {
       setAiGenerating(false);
     }
+  };
+
+  const handleContactClick = (contactId: string) => {
+    const chat = getOrCreateChat(contactId);
+    setActiveChat(chat.id);
+    setActiveTab('chat');
+  };
+
+  const handleContactInfo = (e: React.MouseEvent, contactId: string) => {
+    e.stopPropagation();
+    setSelectedId(contactId);
   };
 
   const handleAddAiContact = (partial: Partial<Contact>) => {
@@ -237,13 +251,20 @@ export default function ContactList() {
             <div className="px-4 py-1.5 bg-wechat-bg text-small text-wechat-text-gray font-medium">{letter}</div>
             {items.map(c => (
               <div key={c.id} id={`contact-${c.id}`}
-                onClick={() => setSelectedId(c.id)}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-wechat-bg cursor-pointer transition-colors border-b border-wechat-divider last:border-0">
+                onClick={() => handleContactClick(c.id)}
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-wechat-bg cursor-pointer transition-colors border-b border-wechat-divider last:border-0 group/contact">
                 <Avatar gradient={c.avatar} name={c.name} size="lg" src={c.avatarType === 'image' ? c.avatarImage : undefined} />
                 <div className="flex-1">
                   <p className="text-body">{c.name}</p>
                   {c.tags && <p className="text-small text-wechat-text-gray">{c.tags.join(' · ')}</p>}
                 </div>
+                <button
+                  onClick={(e) => handleContactInfo(e, c.id)}
+                  className="p-1.5 rounded-full hover:bg-gray-200 opacity-0 group-hover/contact:opacity-100 transition-all"
+                  title="查看详情"
+                >
+                  <Info size={14} className="text-wechat-text-light" />
+                </button>
               </div>
             ))}
           </div>

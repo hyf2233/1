@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import Avatar from '../shared/Avatar';
 import MessageBubble, { ChatEntryBubble } from './MessageBubble';
 import ChatInput from './ChatInput';
 import HistoryDrawer from './HistoryDrawer';
+import ContactDetail from '../contacts/ContactDetail';
+import Modal from '../shared/Modal';
 import { MoreHorizontal, Clock } from 'lucide-react';
 
 function stripXmlTags(text: string): string {
@@ -28,6 +30,7 @@ export default function ChatDetail() {
   const userName = settings.userName || '用户';
   const userAvatarGradient = 'linear-gradient(135deg, #07C160 0%, #06AD56 100%)';
   const userAvatarSrc = settings.userAvatar || undefined;
+  const [showContactDetail, setShowContactDetail] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,7 +54,8 @@ export default function ChatDetail() {
     <div className="flex-1 flex flex-col h-full">
       {/* Header — WeChat style */}
       <div className="bg-[#EDEDED] border-b border-wechat-divider px-4 py-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 cursor-pointer"
+          onClick={() => setShowContactDetail(true)}>
           <Avatar
             gradient={contact.avatar}
             name={contact.name}
@@ -158,6 +162,13 @@ export default function ChatDetail() {
 
       <ChatInput />
       <HistoryDrawer />
+
+      {/* Contact detail modal */}
+      {contact && (
+        <Modal open={showContactDetail} onClose={() => setShowContactDetail(false)} title="联系人详情">
+          <ContactDetail contact={contact} onClose={() => setShowContactDetail(false)} />
+        </Modal>
+      )}
     </div>
   );
 }

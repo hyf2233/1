@@ -51,53 +51,82 @@ export default function MessageBubble({
     const hasTypedContent = resolvedChats !== null && resolvedChats.length > 0;
 
     return (
-      <div
-        className={`flex justify-end items-start gap-2.5 mb-0 message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
+      <div className={`message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
         onMouseEnter={() => setShowActions(true)}
-        onMouseLeave={() => setShowActions(false)}
-      >
-        <div className="max-w-[60%] group">
-          <div className="flex justify-end items-center gap-2 mb-1">
-            <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
-            <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || '我'}</span>
+        onMouseLeave={() => setShowActions(false)}>
+        {hasTypedContent ? (
+          /* Each chat entry gets its own avatar on the right */
+          resolvedChats!.map((chat, i) => (
+            <div key={i} className={`flex justify-end items-start gap-2.5 ${i > 0 ? 'mt-1' : ''}`}>
+              <div className="max-w-[60%] group">
+                {i === 0 && (
+                  <div className="flex justify-end items-center gap-2 mb-0.5">
+                    <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+                    <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || '我'}</span>
+                  </div>
+                )}
+                <UserChatEntryBubble entry={chat} />
+                {i === resolvedChats!.length - 1 && showActions && (
+                  <div className="flex justify-end gap-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    {onBacktrack && (
+                      <button onClick={onBacktrack} className="text-[11px] text-wechat-text-light/60 hover:text-wechat-green transition-colors duration-150">
+                        回溯
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button onClick={onDelete} className="text-[11px] text-wechat-text-light/60 hover:text-wechat-danger transition-colors duration-150 flex items-center gap-0.5">
+                        <Trash2 size={10} /> 删除
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
+                <Avatar
+                  size="sm"
+                  name={avatarName || '我'}
+                  gradient={avatarGradient || 'linear-gradient(135deg, #07C160, #06AD56)'}
+                  src={avatarSrc}
+                />
+              </div>
+            </div>
+          ))
+        ) : (
+          /* Plain text user message */
+          <div className="flex justify-end items-start gap-2.5">
+            <div className="max-w-[60%] group">
+              <div className="flex justify-end items-center gap-2 mb-1">
+                <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+                <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || '我'}</span>
+              </div>
+              <div className="chat-bubble-user">
+                <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</p>
+              </div>
+              {showActions && (
+                <div className="flex justify-end gap-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  {onBacktrack && (
+                    <button onClick={onBacktrack} className="text-[11px] text-wechat-text-light/60 hover:text-wechat-green transition-colors duration-150">
+                      回溯
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button onClick={onDelete} className="text-[11px] text-wechat-text-light/60 hover:text-wechat-danger transition-colors duration-150 flex items-center gap-0.5">
+                      <Trash2 size={10} /> 删除
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
+              <Avatar
+                size="sm"
+                name={avatarName || '我'}
+                gradient={avatarGradient || 'linear-gradient(135deg, #07C160, #06AD56)'}
+                src={avatarSrc}
+              />
+            </div>
           </div>
-          {hasTypedContent ? (
-            /* Typed user message — use type-specific bubble styles on the right */
-            <div className="space-y-1.5">
-              {resolvedChats!.map((chat, i) => (
-                <UserChatEntryBubble key={i} entry={chat} />
-              ))}
-            </div>
-          ) : (
-            /* Plain text user message */
-            <div className="chat-bubble-user">
-              <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</p>
-            </div>
-          )}
-          {showActions && (
-            <div className="flex justify-end gap-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              {onBacktrack && (
-                <button onClick={onBacktrack} className="text-[11px] text-wechat-text-light/60 hover:text-wechat-green transition-colors duration-150">
-                  回溯
-                </button>
-              )}
-              {onDelete && (
-                <button onClick={onDelete} className="text-[11px] text-wechat-text-light/60 hover:text-wechat-danger transition-colors duration-150 flex items-center gap-0.5">
-                  <Trash2 size={10} /> 删除
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-        {/* User avatar on the right — always show */}
-        <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
-          <Avatar
-            size="sm"
-            name={avatarName || '我'}
-            gradient={avatarGradient || 'linear-gradient(135deg, #07C160, #06AD56)'}
-            src={avatarSrc}
-          />
-        </div>
+        )}
       </div>
     );
   }
@@ -106,74 +135,95 @@ export default function MessageBubble({
   const hasThinking = parsed?.thinking && parsed.thinking.trim();
 
   return (
-    <div
-      className={`flex justify-start items-start gap-2.5 mb-0 message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
+    <div className={`message-enter px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-    >
-      {/* Avatar column — always show */}
-      <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
-        <Avatar
-          size="sm"
-          name={avatarName || 'AI'}
-          gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
-          src={avatarSrc}
-        />
-      </div>
-
-      <div className="max-w-[60%] group min-w-0">
-        {/* Time + name label — always show */}
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || 'AI'}</span>
-          <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
-        </div>
-
-        {/* Thinking fold */}
-        {hasThinking && (
-          <div className="mb-1.5">
-            <button
-              onClick={() => setThinkingOpen(!thinkingOpen)}
-              className="flex items-center gap-1.5 text-[11px] text-wechat-text-light/60 hover:text-wechat-green transition-colors duration-150 px-1"
-            >
-              <Brain size={11} className="flex-shrink-0" />
-              <span>思考过程</span>
-              {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-            </button>
-            {thinkingOpen && (
-              <div className="mt-1.5 p-3 bg-white/60 backdrop-blur-sm rounded-lg text-[12px] text-wechat-text-gray leading-relaxed border-l-2 border-wechat-green shadow-sm animate-fadeIn">
-                {parsed!.thinking}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Chat entries */}
-        <div className="space-y-1.5">
-          {resolvedChats ? (
-            resolvedChats.map((chat, i) => (
-              <ChatEntryBubble key={i} entry={chat} isConsecutive={isConsecutive && i > 0} />
-            ))
-          ) : (
-            <div className="chat-bubble-other">
-              <p className="whitespace-pre-wrap leading-relaxed text-[15px]">{message.content}</p>
+      onMouseLeave={() => setShowActions(false)}>
+      {/* Thinking fold — above all entries */}
+      {hasThinking && (
+        <div className="mb-1.5 ml-[42px]">
+          <button
+            onClick={() => setThinkingOpen(!thinkingOpen)}
+            className="flex items-center gap-1.5 text-[11px] text-wechat-text-light/60 hover:text-wechat-green transition-colors duration-150 px-1"
+          >
+            <Brain size={11} className="flex-shrink-0" />
+            <span>思考过程</span>
+            {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+          </button>
+          {thinkingOpen && (
+            <div className="mt-1.5 p-3 bg-white/60 backdrop-blur-sm rounded-lg text-[12px] text-wechat-text-gray leading-relaxed border-l-2 border-wechat-green shadow-sm animate-fadeIn">
+              {parsed!.thinking}
             </div>
           )}
         </div>
+      )}
 
-        {/* Consecutive messages — compact spacing only */}
-
-        {/* Hover actions */}
-        {showActions && onDelete && (
-          <div className="flex gap-2 mt-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              onClick={onDelete}
-              className="text-[11px] text-wechat-text-light/60 hover:text-wechat-danger transition-colors duration-150 flex items-center gap-0.5"
-            >
-              <Trash2 size={10} /> 删除
-            </button>
+      {/* Each chat entry gets its own avatar+bubble — like WeChat */}
+      {resolvedChats ? (
+        resolvedChats.map((chat, i) => (
+          <div key={i} className={`flex justify-start items-start gap-2.5 ${i > 0 ? 'mt-1' : ''}`}>
+            {/* Avatar for each entry */}
+            <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
+              <Avatar
+                size="sm"
+                name={avatarName || 'AI'}
+                gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
+                src={avatarSrc}
+              />
+            </div>
+            <div className="max-w-[60%] group min-w-0">
+              {/* Name + time only on first entry */}
+              {i === 0 && (
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || 'AI'}</span>
+                  <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+                </div>
+              )}
+              <ChatEntryBubble entry={chat} isConsecutive={i > 0} />
+              {/* Hover delete on last entry */}
+              {i === resolvedChats.length - 1 && showActions && onDelete && (
+                <div className="flex gap-2 mt-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <button
+                    onClick={onDelete}
+                    className="text-[11px] text-wechat-text-light/60 hover:text-wechat-danger transition-colors duration-150 flex items-center gap-0.5"
+                  >
+                    <Trash2 size={10} /> 删除
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        ))
+      ) : (
+        <div className="flex justify-start items-start gap-2.5">
+          <div className="flex-shrink-0" style={{ width: 34, height: 34 }}>
+            <Avatar
+              size="sm"
+              name={avatarName || 'AI'}
+              gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
+              src={avatarSrc}
+            />
+          </div>
+          <div className="max-w-[60%] group min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[12px] font-medium text-wechat-text-secondary">{avatarName || 'AI'}</span>
+              <span className="text-[10px] text-wechat-text-light/70 font-medium tracking-wide">{timeStr}</span>
+            </div>
+            <div className="chat-bubble-other">
+              <p className="whitespace-pre-wrap leading-relaxed text-[15px]">{message.content}</p>
+            </div>
+            {showActions && onDelete && (
+              <div className="flex gap-2 mt-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <button
+                  onClick={onDelete}
+                  className="text-[11px] text-wechat-text-light/60 hover:text-wechat-danger transition-colors duration-150 flex items-center gap-0.5"
+                >
+                  <Trash2 size={10} /> 删除
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
