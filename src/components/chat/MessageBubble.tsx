@@ -7,6 +7,7 @@ import {
   Music, Download, Navigation,
 } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
+import { parseChatEntriesFromXml } from '../../sillytavern/editor-utils';
 import Avatar from '../shared/Avatar';
 
 interface Props {
@@ -31,12 +32,23 @@ export default function MessageBubble({
   const settings = useAppStore(s => s.settings);
 
   const timeStr = useMemo(() => formatMessageTime(message.timestamp), [message.timestamp]);
+
+  // Resolve chat entries: prefer parsed.chats, fall back to parsing content as XML, then plain text
+  const resolvedChats: ChatEntry[] | null = useMemo(() => {
+    if (message.parsed?.chats && message.parsed.chats.length > 0) {
+      return message.parsed.chats;
+    }
+    // Try parsing content as XML (for messages from lorebook or manual entries)
+    const parsed = parseChatEntriesFromXml(message.content);
+    if (parsed.length > 0) return parsed;
+    return null;
+  }, [message.content, message.parsed?.chats]);
+
   const parsed = message.parsed;
 
   // ── USER MESSAGE (right side) ──
   if (isUser) {
-    const userChats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
-    const hasTypedContent = userChats !== null && userChats.length > 0;
+    const hasTypedContent = resolvedChats !== null && resolvedChats.length > 0;
 
     return (
       <div
@@ -53,7 +65,7 @@ export default function MessageBubble({
           {hasTypedContent ? (
             /* Typed user message — use type-specific bubble styles on the right */
             <div className="space-y-1.5">
-              {userChats!.map((chat, i) => (
+              {resolvedChats!.map((chat, i) => (
                 <UserChatEntryBubble key={i} entry={chat} />
               ))}
             </div>
@@ -84,7 +96,6 @@ export default function MessageBubble({
 
   // ── AI / Assistant message ──
   const hasThinking = parsed?.thinking && parsed.thinking.trim();
-  const chats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
 
   return (
     <div
@@ -134,8 +145,8 @@ export default function MessageBubble({
 
         {/* Chat entries */}
         <div className="space-y-1.5">
-          {chats ? (
-            chats.map((chat, i) => (
+          {resolvedChats ? (
+            resolvedChats.map((chat, i) => (
               <ChatEntryBubble key={i} entry={chat} isConsecutive={isConsecutive && i > 0} />
             ))
           ) : (

@@ -679,7 +679,15 @@ function messageToLorebookEntry(
   // Store chat entries as re-parseable XML so types survive lorebook roundtrip
   let contentBody = msg.content;
   if (msg.parsed?.chats && msg.parsed.chats.length > 0) {
+    // Has explicit parsed chat entries → serialize to XML
     contentBody = chatEntriesToXml(msg.parsed.chats, '\n');
+  } else {
+    // Try to parse content as XML — if it already contains <chat> tags, preserve them
+    const parsed = parseChatEntriesFromXml(msg.content);
+    if (parsed.length > 0) {
+      // Content already has XML chat entries, keep in XML format
+      contentBody = chatEntriesToXml(parsed, '\n');
+    }
   }
 
   const entry = createDefaultEntry();
@@ -833,12 +841,14 @@ function rebuildChatFromLorebook(
   });
 }
 
-/** Extract the body content from a lorebook entry (strip header line) */
+/** Extract the body content from a lorebook entry (strip header line, preserve XML) */
 function extractBodyFromEntry(entry: LorebookEntry): string {
   const lines = entry.content.split('\n');
-  // Skip the header line
-  if (lines.length > 0 && lines[0].startsWith('【')) {
-    return lines.slice(1).join('\n').trim();
+  // Skip the metadata header line (starts with 【)
+  if (lines.length > 1 && lines[0].startsWith('【')) {
+    const body = lines.slice(1).join('\n').trim();
+    // If body starts with <chat, it's XML — return as-is
+    return body;
   }
   return entry.content.trim();
 }
