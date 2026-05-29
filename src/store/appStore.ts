@@ -23,6 +23,8 @@ interface AppState {
   contacts: Contact[];
   getContact: (id: string) => Contact | undefined;
   updateContact: (id: string, patch: Partial<Contact>) => void;
+  addContact: (contact: Contact) => void;
+  removeContact: (id: string) => void;
 
   // Chats
   chats: ChatSession[];
@@ -82,9 +84,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   contacts: presetContacts,
   getContact: (id) => get().contacts.find(c => c.id === id),
-  updateContact: (id, patch) => set(s => ({
-    contacts: s.contacts.map(c => c.id === id ? { ...c, ...patch } : c),
-  })),
+  updateContact: (id, patch) => {
+    set(s => {
+      const updatedContacts = s.contacts.map(c => c.id === id ? { ...c, ...patch } : c);
+      const updatedLorebooks = syncContactToLorebook(s.lorebooks, updatedContacts.find(c => c.id === id)!);
+      return { contacts: updatedContacts, lorebooks: updatedLorebooks };
+    });
+  },
+  addContact: (contact) => set(s => {
+    const updatedContacts = [...s.contacts, contact];
+    const updatedLorebooks = syncContactToLorebook(s.lorebooks, contact);
+    return { contacts: updatedContacts, lorebooks: updatedLorebooks };
+  }),
+  removeContact: (id) => set(s => {
+    const updatedContacts = s.contacts.filter(c => c.id !== id);
+    const updatedLorebooks = removeContactFromLorebook(s.lorebooks, id);
+    return { contacts: updatedContacts, lorebooks: updatedLorebooks };
+  }),
 
   chats: presetChats,
   activeChatId: null,
@@ -860,6 +876,82 @@ function extractRoleFromEntry(entry: LorebookEntry): 'user' | 'assistant' {
   // Parse the header emoji: 【👤 ...】 = user, 【🤖 ...】 = assistant
   if (entry.content.startsWith('【👤')) return 'user';
   return 'assistant';
+}
+
+// ========== Contact ↔ Lorebook Sync ==========
+
+const CHARACTER_INFO_BOOK_ID = 'lb-character-info';
+
+/** Format a contact as a character info world book entry content string */
+function contactToEntryContent(contact: Contact): string {
+  return [
+    `【人物信息 · ${contact.name}】`,
+    `姓名：${contact.name}`,
+    `学历：${contact.education || '未知'}`,
+    `地区：${contact.region || '未知'}`,
+    `来源：${contact.source || '未知'}`,
+    `添加时间：${contact.addedTime || new Date().toLocaleDateString('zh-CN')}`,
+    `更多信息：${contact.bio || ''}`,
+  ].join('\n');
+}
+
+/** Parse a character info world book entry content back to contact fields */
+function entryContentToContactPatch(content: string): Partial<Contact> {
+  const patch: Partial<Contact> = {};
+  const nameMatch = content.match(/姓名：(.+)/);
+  if (nameMatch) patch.name = nameMatch[1].trim();
+  const eduMatch = content.match(/学历：(.+)/);
+  if (eduMatch) patch.education = eduMatch[1].trim();
+  const regionMatch = content.match(/地区：(.+)/);
+  if (regionMatch) patch.region = regionMatch[1].trim();
+  const sourceMatch = content.match(/来源：(.+)/);
+  if (sourceMatch) patch.source = sourceMatch[1].trim();
+  const timeMatch = content.match(/添加时间：(.+)/);
+  if (timeMatch) patch.addedTime = timeMatch[1].trim();
+  const moreMatch = content.match(/更多信息：(.+)/);
+  if (moreMatch) patch.bio = moreMatch[1].trim();
+  return patch;
+}
+
+/** Sync a single contact to the character info world book */
+function syncContactToLorebook(lorebooks: Lorebook[], contact: Contact): Lorebook[] {
+  const entryId = `ci-${contact.id}`;
+  return lorebooks.map(lb => {
+    if (lb.id !== CHARACTER_INFO_BOOK_ID) return lb;
+    const existingIdx = lb.entries.findIndex(e => e.id === entryId);
+    const newEntry: LorebookEntry = {
+      id: entryId,
+      keys: [contact.name],
+      secondaryKeys: [],
+      content: contactToEntryContent(contact),
+      order: lb.entries.length + 1,
+      position: 'after_char',
+      selective: false,
+      selectiveLogic: 'and_any',
+      constant: false,  // 关键词触发
+      probability: 100,
+      addMemo: false,
+    };
+    if (existingIdx >= 0) {
+      const entries = [...lb.entries];
+      entries[existingIdx] = newEntry;
+      return { ...lb, entries, updatedAt: Date.now() };
+    }
+    return { ...lb, entries: [...lb.entries, newEntry], updatedAt: Date.now() };
+  });
+}
+
+/** Remove a contact from the character info world book */
+function removeContactFromLorebook(lorebooks: Lorebook[], contactId: string): Lorebook[] {
+  const entryId = `ci-${contactId}`;
+  return lorebooks.map(lb => {
+    if (lb.id !== CHARACTER_INFO_BOOK_ID) return lb;
+    return {
+      ...lb,
+      entries: lb.entries.filter(e => e.id !== entryId),
+      updatedAt: Date.now(),
+    };
+  });
 }
 
 // ========== Tavern-style Fallback Reply ==========

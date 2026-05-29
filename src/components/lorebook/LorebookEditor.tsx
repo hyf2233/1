@@ -26,17 +26,26 @@ function getTriggerMode(entry: LorebookEntry): TriggerMode {
   return 'keyword';
 }
 
-/** Extract a human-readable time label from entry content */
+/** Extract a human-readable time/date label from entry content */
 function extractTimeLabel(entry: LorebookEntry): string {
-  // Try to parse header: 【🤖 苏晓月 · 2026/5/29 22:23:43】
+  // For character info entries: extract "添加时间" from content
+  const addedMatch = entry.content.match(/添加时间：(.+)/);
+  if (addedMatch) return addedMatch[1].trim();
+
+  // For chat history entries: parse header 【🤖 苏晓月 · 2026/5/29 22:23:43】
   const headerMatch = entry.content.match(/【[^】]+·\s*([^】]+)】/);
   if (headerMatch) {
     const raw = headerMatch[1].trim();
-    // Try to shorten: "2026/5/29 22:23:43" → "5/29 22:23"
-    const timeMatch = raw.match(/(\d{1,2}\/\d{1,2})\s+(\d{2}:\d{2})/);
-    if (timeMatch) return `${timeMatch[1]} ${timeMatch[2]}`;
-    return raw.slice(0, 14);
+    // Only return if it looks like a datetime (contains numbers and / or :)
+    if (/\d{1,2}[\/-]\d{1,2}/.test(raw) || /\d{2}:\d{2}/.test(raw)) {
+      const timeMatch = raw.match(/(\d{1,2}\/\d{1,2})\s+(\d{2}:\d{2})/);
+      if (timeMatch) return `${timeMatch[1]} ${timeMatch[2]}`;
+      return raw.slice(0, 14);
+    }
+    // Don't return plain names (like from character info headers)
+    return '';
   }
+
   // Fallback: try to extract time from <chat time="..."> tag
   const chatMatch = entry.content.match(/<chat[^>]*time="([^"]*)"[^>]*>/);
   if (chatMatch) return chatMatch[1];

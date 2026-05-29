@@ -1,7 +1,35 @@
 // src/data/lorebooks.ts — 预设世界书
-import type { Lorebook } from '../sillytavern/types';
+import type { Lorebook, LorebookEntry } from '../sillytavern/types';
+import type { Contact } from '../types';
 
 const now = Date.now();
+
+function contactToLorebookEntry(contact: Contact, order: number): LorebookEntry {
+  return {
+    id: `ci-${contact.id}`,
+    keys: [contact.name],
+    secondaryKeys: [],
+    content: [
+      `【人物信息 · ${contact.name}】`,
+      `姓名：${contact.name}`,
+      `学历：${contact.education || '未知'}`,
+      `地区：${contact.region || '未知'}`,
+      `来源：${contact.source || '未知'}`,
+      `添加时间：${contact.addedTime || '未知'}`,
+      `更多信息：${contact.bio || ''}`,
+    ].join('\n'),
+    order,
+    position: 'after_char',
+    selective: false,
+    selectiveLogic: 'and_any',
+    constant: false,
+    probability: 100,
+    addMemo: false,
+  };
+}
+
+// Import contacts to seed character info
+import { presetContacts } from './contacts';
 
 /** 系统提示词格式 — 定义微信聊天模拟器的输出规范 */
 export const formatSpecLorebook: Lorebook = {
@@ -328,4 +356,93 @@ export const worldSettingLorebook: Lorebook = {
   ],
 };
 
-export const presetLorebooks: Lorebook[] = [formatSpecLorebook, worldSettingLorebook];
+/** 人物信息 — 通讯录中所有角色的信息档案 */
+export const characterInfoLorebook: Lorebook = {
+  id: 'lb-character-info',
+  name: '人物信息',
+  description: '通讯录中所有角色的信息档案。每条条目对应一个角色，触发词为角色姓名。',
+  recursiveScanning: false,
+  caseSensitive: false,
+  matchWholeWords: false,
+  createdAt: now,
+  updatedAt: now,
+  entries: presetContacts.map((c, i) => contactToLorebookEntry(c, i + 1)),
+};
+
+/** AI 角色生成格式规范 — 定义通讯录搜索时 AI 生成角色的输出格式 */
+export const contactGenFormatLorebook: Lorebook = {
+  id: 'lb-contact-gen-format',
+  name: '角色生成格式规范',
+  description: '定义AI在通讯录搜索中生成角色的输出格式。必须始终激活。',
+  recursiveScanning: false,
+  caseSensitive: false,
+  matchWholeWords: false,
+  createdAt: now,
+  updatedAt: now,
+  entries: [
+    {
+      id: 'fe-contact-gen',
+      keys: ['生成角色', '创建人物', '新角色', '添加人物', '通讯录', '联系人'],
+      secondaryKeys: [],
+      content: `【角色生成格式规范 — 必须严格遵守】
+
+当用户要求生成角色信息时，你必须按照以下 XML 格式输出。
+
+所有生成的字符必须包裹在 <list> 标签内，每个角色用 <char> 标签包裹。
+
+══════════════════════════════════════
+【输出格式】
+══════════════════════════════════════
+
+<list>
+  <char>
+    <name>角色姓名</name>
+    <education>学历</education>
+    <region>所在地区</region>
+    <source>来源（如：用户生成、世界观预设、AI生成等）</source>
+    <bio>角色简介</bio>
+    <avatar>CSS渐变色（如 linear-gradient(135deg, #f093fb 0%, #f5576c 100%)）</avatar>
+  </char>
+  <char>
+    <name>第二个角色姓名</name>
+    ...
+  </char>
+</list>
+
+══════════════════════════════════════
+【规则】
+══════════════════════════════════════
+
+1. 每个 <char> 必须包含 name、education、region、source、bio、avatar 字段
+2. education 填写学历，如未指定则填"未知"
+3. region 填写具体地区，需与世界观设定一致
+4. source 填写"AI生成"
+5. bio 写1-2句该角色的简介
+6. avatar 填写CSS渐变，使用合适的颜色搭配
+
+══════════════════════════════════════
+【示例】
+══════════════════════════════════════
+
+<list>
+  <char>
+    <name>陆晨</name>
+    <education>京海大学计算机硕士</education>
+    <region>京海市·新城区</region>
+    <source>AI生成</source>
+    <bio>自由黑客，曾在城市管理局信息部门工作，现为地下情报网络成员</bio>
+    <avatar>linear-gradient(135deg, #667eea 0%, #764ba2 100%)</avatar>
+  </char>
+</list>`,
+      order: 1,
+      position: 'before_char',
+      selective: false,
+      selectiveLogic: 'and_any',
+      constant: true,
+      probability: 100,
+      addMemo: false,
+    },
+  ],
+};
+
+export const presetLorebooks: Lorebook[] = [formatSpecLorebook, worldSettingLorebook, characterInfoLorebook, contactGenFormatLorebook];
