@@ -170,9 +170,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         finalizeMessage(get, set, chat, updatedChat, aiMsg, content, characterName, apiResult.sum);
         return;
-      } catch (err) {
-        console.error('API call failed, falling back to simulated response:', err);
-        set(s => ({ streamedText: '' }));
+      } catch (err: any) {
+        const errMsg = err.message || String(err);
+        set(s => ({
+          isStreaming: false,
+          streamedText: '',
+          toastMessage: `API 调用失败: ${errMsg.slice(0, 80)}`,
+        }));
+        return;
       }
     }
 
@@ -281,7 +286,7 @@ async function callRealApi(
   const stream = presetSettings.stream_openai !== false;
 
   const body: Record<string, any> = {
-    model: presetSettings.openai_model || model,
+    model: model || presetSettings.openai_model || 'gpt-3.5-turbo',
     messages,
     stream,
   };

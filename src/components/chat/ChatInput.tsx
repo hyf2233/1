@@ -78,30 +78,28 @@ export default function ChatInput() {
           />
         </div>
 
-        {/* Send button — replaces static + button */}
+        {/* Send button */}
         {isStreaming ? (
           <button
-            id="sending-indicator"
-            className="p-1.5 flex-shrink-0 cursor-not-allowed"
-            disabled
+            id="stop-btn"
+            className="p-1.5 flex-shrink-0 cursor-pointer hover:bg-gray-100 rounded transition-colors"
+            title="停止生成"
           >
-            <Loader2 size={22} className="text-wechat-green animate-spin" />
-          </button>
-        ) : hasText ? (
-          <button
-            id="send-btn"
-            onClick={handleSend}
-            className="p-1.5 rounded-md bg-wechat-green hover:bg-wechat-green-dark transition-all duration-150 flex-shrink-0 active:scale-90"
-            title="发送"
-          >
-            <Send size={18} className="text-white" />
+            <div className="w-5 h-5 rounded-sm bg-wechat-danger" />
           </button>
         ) : (
           <button
-            id="more-btn"
-            className="p-1.5 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+            id="send-btn"
+            onClick={handleSend}
+            disabled={!hasText}
+            className={`p-2 rounded-lg transition-all duration-150 flex-shrink-0 active:scale-90 ${
+              hasText
+                ? 'bg-wechat-green hover:bg-wechat-green-dark'
+                : 'bg-gray-300 cursor-not-allowed'
+            }`}
+            title="发送 (Enter)"
           >
-            <Send size={18} className="text-wechat-text-gray rotate-90" />
+            <Send size={18} className="text-white" />
           </button>
         )}
       </div>
