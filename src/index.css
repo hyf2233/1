@@ -235,3 +235,132 @@
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
+
+/* ═══════════════════════════════════════
+   CHAT TYPE BUBBLE SPECIFIC STYLES
+   ═══════════════════════════════════════ */
+
+/* ── Voice: red dot pulse ── */
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+.voice-dot {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+/* ── Location: map pin bounce ── */
+@keyframes pinDrop {
+  0% { transform: translateY(-20px); opacity: 0; }
+  60% { transform: translateY(2px); opacity: 1; }
+  80% { transform: translateY(-4px); }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.pin-animate {
+  animation: pinDrop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Location: radar ripple ── */
+@keyframes radarRipple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(250, 81, 81, 0.4);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(250, 81, 81, 0);
+    transform: scale(1.5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(250, 81, 81, 0);
+    transform: scale(1);
+  }
+}
+.radar-ripple {
+  animation: radarRipple 2s ease-out infinite;
+}
+
+/* ── Transfer: shimmer effect ── */
+@keyframes transferShimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.transfer-shimmer {
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 45%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.1) 55%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: transferShimmer 2.5s ease-in-out infinite;
+}
+
+/* ── Image: loading skeleton ── */
+@keyframes imageLoading {
+  0% { background-position: -300px 0; }
+  100% { background-position: 300px 0; }
+}
+.image-skeleton {
+  background: linear-gradient(90deg, #e8e8e8 0%, #f5f5f5 40%, #e8e8e8 80%);
+  background-size: 300px 100%;
+  animation: imageLoading 1.8s ease-in-out infinite;
+}
+
+/* ── Document: slide in ── */
+@keyframes docSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.doc-enter {
+  animation: docSlideIn 0.3s ease-out both;
+}
+
+/* ── Typing dots (refined) ── */
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+.typing-dot-bounce {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #B0B0B0;
+  animation: typingBounce 1.4s infinite;
+}
+
+/* ── Chat bubble entrance stagger for entries ── */
+@keyframes chatEntryEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.chat-entry-enter {
+  animation: chatEntryEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Transfer open animation ── */
+@keyframes transferOpen {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+.transfer-open {
+  animation: transferOpen 0.3s ease-out;
+}
+
+/* ── Read receipt fade ── */
+.read-receipt {
+  transition: opacity 0.3s ease;
+  opacity: 0.4;
+}
+.read-receipt.read {
+  opacity: 0.7;
+}

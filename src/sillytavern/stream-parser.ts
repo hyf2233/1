@@ -15,7 +15,7 @@ export type ParserEvent =
   | { type: 'tag-chunk'; tag: string; chunk: string }
   | { type: 'tag-close'; tag: string; full: string; attrs?: Record<string, string> }
   | { type: 'option-line'; line: string }
-  | { type: 'chat-entry'; chatType: string; content: string; duration?: number }
+  | { type: 'chat-entry'; chatType: string; content: string; duration?: number; amount?: number; transferNote?: string; fileName?: string; fileSize?: string; address?: string; lat?: number; lng?: number; time?: string }
   | { type: 'raw'; chunk: string };
 
 type State = 'NORMAL' | 'BUFFER_TAG' | 'TAGGED' | 'OPAQUE';
@@ -143,6 +143,14 @@ export class StreamTagParser {
             chatType: this.currentAttrs['type'] || 'text',
             content: this.currentBuf,
             duration: this.currentAttrs['duration'] ? Number(this.currentAttrs['duration']) : undefined,
+            amount: this.currentAttrs['amount'] ? Number(this.currentAttrs['amount']) : undefined,
+            transferNote: this.currentAttrs['note'] || undefined,
+            fileName: this.currentAttrs['filename'] || undefined,
+            fileSize: this.currentAttrs['filesize'] || undefined,
+            address: this.currentAttrs['address'] || undefined,
+            lat: this.currentAttrs['lat'] ? Number(this.currentAttrs['lat']) : undefined,
+            lng: this.currentAttrs['lng'] ? Number(this.currentAttrs['lng']) : undefined,
+            time: this.currentAttrs['time'] || undefined,
           });
         }
         this.events.push({ type: 'tag-close', tag: this.currentTag, full: this.currentBuf, attrs: this.currentAttrs });

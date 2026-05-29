@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
 import Avatar from '../shared/Avatar';
-import MessageBubble from './MessageBubble';
+import MessageBubble, { ChatEntryBubble } from './MessageBubble';
 import ChatInput from './ChatInput';
 import HistoryDrawer from './HistoryDrawer';
 import { MoreHorizontal, Clock } from 'lucide-react';
@@ -16,6 +16,7 @@ export default function ChatDetail() {
   const contacts = useAppStore(s => s.contacts);
   const isStreaming = useAppStore(s => s.isStreaming);
   const streamedText = useAppStore(s => s.streamedText);
+  const streamedChats = useAppStore(s => s.streamedChats);
   const toggleHistoryDrawer = useAppStore(s => s.toggleHistoryDrawer);
   const backtrackTo = useAppStore(s => s.backtrackTo);
   const deleteMessage = useAppStore(s => s.deleteMessage);
@@ -94,7 +95,7 @@ export default function ChatDetail() {
           );
         })}
 
-        {/* Streaming text */}
+        {/* Streaming text with chat entry bubbles */}
         {isStreaming && streamedText && (
           <div className="flex justify-start items-start gap-2 message-enter px-4 mt-3">
             <Avatar
@@ -103,11 +104,34 @@ export default function ChatDetail() {
               gradient={contact.avatar}
               src={aiAvatarSrc}
             />
-            <div className="chat-bubble-other max-w-[65%]">
-              <p className="whitespace-pre-wrap leading-relaxed text-body">
-                {stripXmlTags(streamedText)}
-                <span className="inline-block w-[2px] h-[1.1em] bg-wechat-green ml-0.5 align-middle animate-pulse" />
-              </p>
+            <div className="max-w-[60%] min-w-0">
+              {/* Name label */}
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[12px] font-medium text-wechat-text-secondary">{contact.name}</span>
+              </div>
+              {/* Render complete chat entries as proper bubbles */}
+              {streamedChats.length > 0 ? (
+                <div className="space-y-1.5">
+                  {streamedChats.map((chat, i) => (
+                    <ChatEntryBubble key={i} entry={chat} />
+                  ))}
+                  {/* Show partial streaming text for the current chat entry being typed */}
+                  {streamedText && streamedChats.length === 0 && (
+                    <div className="chat-bubble-other">
+                      <p className="whitespace-pre-wrap leading-relaxed text-[15px]">
+                        {stripXmlTags(streamedText)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="chat-bubble-other max-w-[65%]">
+                  <p className="whitespace-pre-wrap leading-relaxed text-body">
+                    {stripXmlTags(streamedText)}
+                    <span className="inline-block w-[2px] h-[1.1em] bg-wechat-green ml-0.5 align-middle animate-pulse" />
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

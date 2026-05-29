@@ -1,7 +1,7 @@
 // src/store/appStore.ts
 import { create } from 'zustand';
 import type { TabId, Contact, ChatSession, ChatMessage, Moment, BranchPoint } from '../types';
-import type { AppSettings, ChatPreset, Lorebook, LorebookEntry } from '../sillytavern/types';
+import type { AppSettings, ChatPreset, Lorebook, LorebookEntry, ChatEntry } from '../sillytavern/types';
 import { DEFAULT_SETTINGS, createDefaultPreset, DEFAULT_FORMAT_PROMPT } from '../sillytavern/types';
 import { assemblePrompt } from '../sillytavern/prompt-assembler';
 import { createLorebookEngine } from '../sillytavern/lorebook-engine';
@@ -32,6 +32,7 @@ interface AppState {
   sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
   streamedText: string;
+  streamedChats: ChatEntry[];
   currentOptions: string[];
   chooseOption: (option: string) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => void;
@@ -133,6 +134,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   isStreaming: false,
   streamedText: '',
+  streamedChats: [],
   currentOptions: [],
 
   sendMessage: async (content: string) => {
@@ -164,6 +166,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       chats: s.chats.map(c => c.id === chat.id ? updatedChat : c),
       isStreaming: true,
       streamedText: '',
+      streamedChats: [],
       currentOptions: [],
     }));
 
@@ -189,8 +192,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         const apiResult = await callRealApi(
           settings.api.baseUrl, settings.api.apiKey, settings.api.model,
           promptMessages, presetSettings, settings.customTags,
-          (streamedMaintext, options) => {
-            set(s => ({ streamedText: streamedMaintext, currentOptions: options }));
+          (streamedMaintext, streamedChats, options) => {
+            set(s => ({ streamedText: streamedMaintext, streamedChats: [...streamedChats], currentOptions: options }));
           },
         );
 
@@ -227,10 +230,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Fallback: simulated tavern-style response
     const fakeReply = generateTavernReply(content, characterName, activeLorebooks, matchedEntries);
-    const displayText = fakeReply.chats.map(c => c.content).join('');
-    for (let i = 0; i < displayText.length; i++) {
+    const displayText = fakeReply.chats.map(c => c.content).join('\n');
+    // Stream in text chunks, revealing chat entries one at a time
+    const allChats = fakeReply.chats;
+    let shownChats = 0;
+    let charIdx = 0;
+    const totalChars = displayText.length;
+
+    while (charIdx < totalChars) {
       await new Promise(r => setTimeout(r, 25 + Math.random() * 35));
-      set(s => ({ streamedText: displayText.slice(0, i + 1) }));
+      charIdx = Math.min(charIdx + 1, totalChars);
+
+      // Determine which chats are "complete" based on characters consumed
+      let consumedChars = 0;
+      let completeChats = 0;
+      for (const chat of allChats) {
+        consumedChars += chat.content.length + 1; // +1 for newline
+        if (charIdx >= consumedChars) {
+          completeChats++;
+        } else {
+          break;
+        }
+      }
+      shownChats = Math.max(shownChats, completeChats);
+
+      set(s => ({
+        streamedText: displayText.slice(0, charIdx),
+        streamedChats: allChats.slice(0, shownChats),
+      }));
     }
 
     const aiMsg: ChatMessage = {
@@ -378,7 +405,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 // ========== Helper Functions ==========
 
-import type { ChatEntry } from '../sillytavern/types';
 interface ApiReply { thinking: string; maintext: string; chats: ChatEntry[]; sum: string; varsRaw: string; }
 
 /** Make a real API call with SSE streaming */
@@ -387,7 +413,7 @@ async function callRealApi(
   messages: { role: string; content: string }[],
   presetSettings: Record<string, any>,
   customTags: string[],
-  onStream: (maintext: string, options: string[]) => void,
+  onStream: (maintext: string, chats: ChatEntry[], options: string[]) => void,
 ): Promise<ApiReply> {
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
   const stream = presetSettings.stream_openai !== false;
@@ -428,6 +454,7 @@ async function callRealApi(
   const decoder = new TextDecoder();
   let fullText = '';
   let maintext = '';
+  const streamedChats: ChatEntry[] = [];
   const options: string[] = [];
 
   while (true) {
@@ -452,6 +479,20 @@ async function callRealApi(
 
         for (const ev of events) {
           if (ev.type === 'chat-entry') {
+            const entry: ChatEntry = {
+              type: (ev.chatType as ChatEntry['type']) || 'text',
+              content: ev.content || '',
+              duration: ev.duration,
+              amount: ev.amount,
+              transferNote: ev.transferNote,
+              fileName: ev.fileName,
+              fileSize: ev.fileSize,
+              address: ev.address,
+              lat: ev.lat,
+              lng: ev.lng,
+              time: ev.time,
+            };
+            streamedChats.push(entry);
             const chatText = ev.content || '';
             if (chatText.trim()) {
               maintext += (maintext ? '\n' : '') + chatText;
@@ -463,7 +504,7 @@ async function callRealApi(
           }
         }
 
-        onStream(maintext || fullText, []);
+        onStream(maintext || fullText, streamedChats, []);
       } catch {
         // Skip malformed SSE lines
       }
@@ -492,21 +533,22 @@ function parseApiResponse(raw: string): ApiReply {
   const varsRaw = extractTag(raw, 'vars') || '';
 
   const chats: ApiReply['chats'] = [];
-  const chatRegex = /<chat\s+type="(\w+)"(?:\s+duration="(\d+)")?(?:\s+amount="([\d.]+)")?(?:\s+note="([^"]*)")?(?:\s+filename="([^"]*)")?(?:\s+filesize="([^"]*)")?(?:\s+address="([^"]*)")?(?:\s+lat="([\d.]+)")?(?:\s+lng="([\d.]+)")?>([\s\S]*?)<\/chat>/gi;
+  const chatRegex = /<chat\s+type="(\w+)"(?:\s+duration="(\d+)")?(?:\s+time="([^"]*)")?(?:\s+amount="([\d.]+)")?(?:\s+note="([^"]*)")?(?:\s+filename="([^"]*)")?(?:\s+filesize="([^"]*)")?(?:\s+address="([^"]*)")?(?:\s+lat="([\d.]+)")?(?:\s+lng="([\d.]+)")?>([\s\S]*?)<\/chat>/gi;
   let m;
   while ((m = chatRegex.exec(raw)) !== null) {
     const type = (m[1] as ChatEntry['type']) || 'text';
     const entry: ChatEntry = {
       type,
-      content: (m[10] || '').trim(),
+      content: (m[11] || '').trim(),
       duration: m[2] ? Number(m[2]) : undefined,
-      amount: m[3] ? Number(m[3]) : undefined,
-      transferNote: m[4] || undefined,
-      fileName: m[5] || undefined,
-      fileSize: m[6] || undefined,
-      address: m[7] || undefined,
-      lat: m[8] ? Number(m[8]) : undefined,
-      lng: m[9] ? Number(m[9]) : undefined,
+      time: m[3] || undefined,
+      amount: m[4] ? Number(m[4]) : undefined,
+      transferNote: m[5] || undefined,
+      fileName: m[6] || undefined,
+      fileSize: m[7] || undefined,
+      address: m[8] || undefined,
+      lat: m[9] ? Number(m[9]) : undefined,
+      lng: m[10] ? Number(m[10]) : undefined,
     };
     chats.push(entry);
   }
@@ -590,6 +632,7 @@ function finalizeAndSync(
       chats: s.chats.map(c => c.id === chat.id ? finalChat : c),
       isStreaming: false,
       streamedText: '',
+      streamedChats: [],
       currentOptions: [],
       lorebooks: lorebookExists
         ? s.lorebooks.map(lb => lb.id === historyBookId ? historyBook : lb)
@@ -762,52 +805,56 @@ function generateTavernReply(
   _activeLorebooks: Lorebook[], matchedEntries: { entry: LorebookEntry; score: number; matchedKeywords: string[] }[],
 ): { chats: ChatEntry[]; sum: string; thinking: string } {
   const hasWorldContext = matchedEntries.length > 0;
+  const baseTime = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fmt = (offsetMin: number) =>
+    `${pad(baseTime.getHours())}:${pad(baseTime.getMinutes() + Math.floor(offsetMin))}`;
 
-  const replies: Record<string, () => { chats: { type: string; content: string; duration?: number }[]; thinking: string }> = {
+  const replies: Record<string, () => { chats: ChatEntry[]; thinking: string }> = {
     '冒险|遗迹': () => ({
       thinking: hasWorldContext ? `世界书触发: ${matchedEntries.map(e => e.entry.keys.join(',')).join('; ')}` : '冒险话题',
       chats: [
-        { type: 'text', content: '在！刚在看北境遗迹的资料' },
-        { type: 'text', content: '你上次不是说想一起去吗？我查到一个新线索' },
-        { type: 'location', address: '京海市北城门西3公里废弃矿洞', lat: 39.92, lng: 116.40, content: '遗迹入口大概在这个位置' },
-        { type: 'voice', content: '那个古代符文的位置我基本确定了。在北城门往西三公里的废弃矿洞里。不过这地方有点危险，上次有人进去后失踪了。你考虑清楚要不要来。', duration: 15 },
-        { type: 'document', fileName: '遗迹装备清单.pdf', fileSize: '156KB', content: '我整理了一份装备清单' },
-        { type: 'text', content: '不过去之前你得准备几样东西：手电筒、登山鞋、还有勇气' },
+        { type: 'text', content: '在！刚在看北境遗迹的资料', time: fmt(0) },
+        { type: 'text', content: '你上次不是说想一起去吗？我查到一个新线索', time: fmt(0) },
+        { type: 'location', address: '京海市北城门西3公里废弃矿洞', lat: 39.92, lng: 116.40, content: '遗迹入口大概在这个位置', time: fmt(1) },
+        { type: 'voice', content: '那个古代符文的位置我基本确定了。在北城门往西三公里的废弃矿洞里。不过这地方有点危险，上次有人进去后失踪了。你考虑清楚要不要来。', duration: 15, time: fmt(2) },
+        { type: 'document', fileName: '遗迹装备清单.pdf', fileSize: '156KB', content: '我整理了一份装备清单', time: fmt(3) },
+        { type: 'text', content: '不过去之前你得准备几样东西：手电筒、登山鞋、还有勇气', time: fmt(3) },
       ],
     }),
     '情报|禁术|卷轴': () => ({
       thinking: '情报话题',
       chats: [
-        { type: 'text', content: '嘘...这事不方便打字说' },
-        { type: 'voice', content: '那个卷轴来自一个叫沉默之塔的组织。他们在收集古代符文，目的不明。我手上有一份他们的据点分布图。晚上来老地方，我详细跟你说。', duration: 18 },
-        { type: 'transfer', amount: 500, transferNote: '情报费', content: '情报的费用你先收着' },
-        { type: 'text', content: '对了，带点现金。不是开玩笑。' },
+        { type: 'text', content: '嘘...这事不方便打字说', time: fmt(0) },
+        { type: 'voice', content: '那个卷轴来自一个叫沉默之塔的组织。他们在收集古代符文，目的不明。我手上有一份他们的据点分布图。晚上来老地方，我详细跟你说。', duration: 18, time: fmt(1) },
+        { type: 'transfer', amount: 500, transferNote: '情报费', content: '情报的费用你先收着', time: fmt(2) },
+        { type: 'text', content: '对了，带点现金。不是开玩笑。', time: fmt(2) },
       ],
     }),
     '案子|调查|失踪': () => ({
       thinking: '案件话题',
       chats: [
-        { type: 'text', content: '你可算找我了' },
-        { type: 'text', content: '老城区那个失踪案，我又查到了一些东西' },
-        { type: 'image', content: '失踪者最后出现的地点——旧码头监控截图' },
-        { type: 'document', fileName: '失踪案调查报告.pdf', fileSize: '3.2MB', content: '这是我整理的案情分析' },
-        { type: 'text', content: '三个失踪者都收到过一块刻着符文的黑石。我怀疑和沉默之塔有关。你怎么看？' },
+        { type: 'text', content: '你可算找我了', time: fmt(0) },
+        { type: 'text', content: '老城区那个失踪案，我又查到了一些东西', time: fmt(0) },
+        { type: 'image', content: '失踪者最后出现的地点——旧码头监控截图', time: fmt(1) },
+        { type: 'document', fileName: '失踪案调查报告.pdf', fileSize: '3.2MB', content: '这是我整理的案情分析', time: fmt(2) },
+        { type: 'text', content: '三个失踪者都收到过一块刻着符文的黑石。我怀疑和沉默之塔有关。你怎么看？', time: fmt(2) },
       ],
     }),
     '视频|见面|约': () => ({
       thinking: '视频通话',
       chats: [
-        { type: 'text', content: '打字太慢了，方便视频吗？' },
-        { type: 'video', content: '你看这个——我刚从旧货市场淘到的古籍。封面的符文和北境遗迹的一模一样。这书起码有三百年历史了。', duration: 35 },
-        { type: 'location', address: '京海市老城区晨曦侦探社', lat: 39.9042, lng: 116.4074, content: '我在侦探社，你过来吧' },
-        { type: 'text', content: '怎么样？明天有空的话我带去给你看实物' },
+        { type: 'text', content: '打字太慢了，方便视频吗？', time: fmt(0) },
+        { type: 'video', content: '你看这个——我刚从旧货市场淘到的古籍。封面的符文和北境遗迹的一模一样。这书起码有三百年历史了。', duration: 35, time: fmt(1) },
+        { type: 'location', address: '京海市老城区晨曦侦探社', lat: 39.9042, lng: 116.4074, content: '我在侦探社，你过来吧', time: fmt(2) },
+        { type: 'text', content: '怎么样？明天有空的话我带去给你看实物', time: fmt(2) },
       ],
     }),
     default: () => ({
       thinking: hasWorldContext ? `世界书匹配: ${matchedEntries.length} 条` : '通用回复',
       chats: [
-        { type: 'text', content: `嗯嗯，我在的` },
-        { type: 'text', content: `最近京海市出了不少事，你听说了吗？` },
+        { type: 'text', content: `嗯嗯，我在的`, time: fmt(0) },
+        { type: 'text', content: `最近京海市出了不少事，你听说了吗？`, time: fmt(0) },
       ],
     }),
   };

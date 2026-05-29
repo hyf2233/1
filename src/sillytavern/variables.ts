@@ -90,6 +90,14 @@ export function aggregateEvents(events: ParserEvent[]): ParsedTags {
         type: (ev.chatType as ChatEntry['type']) || 'text',
         content: ev.content || '',
         duration: ev.duration,
+        amount: ev.amount,
+        transferNote: ev.transferNote,
+        fileName: ev.fileName,
+        fileSize: ev.fileSize,
+        address: ev.address,
+        lat: ev.lat,
+        lng: ev.lng,
+        time: ev.time,
       });
     } else if (ev.type === 'tag-close') {
       if (ev.tag === 'thinking' || ev.tag === 'think') parsed.thinking = ev.full;
