@@ -27,9 +27,9 @@ export default function MessageBubble({ message, onBacktrack }: Props) {
           </div>
         ) : (
           <div>
-            {message.parsedTags ? (
+            {message.parsed ? (
               <div className="chat-bubble-other">
-                <p className="whitespace-pre-wrap leading-relaxed">{message.parsedTags.maintext}</p>
+                <p className="whitespace-pre-wrap leading-relaxed">{message.parsed.maintext}</p>
               </div>
             ) : (
               <div className="chat-bubble-other">

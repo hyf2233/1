@@ -1,4 +1,14 @@
 // src/types/index.ts
+import type { ChatSession as STChatSession } from '../sillytavern/types';
+
+// Re-export SillyTavern types
+export type { ChatMessage, ChatPreset, Lorebook, LorebookEntry, AppSettings, ApiSettings, ParsedTags } from '../sillytavern/types';
+
+// Extended ChatSession with WeChat-specific contactId
+export interface ChatSession extends STChatSession {
+  contactId: string;
+}
+
 export interface Contact {
   id: string;
   name: string;
@@ -14,29 +24,6 @@ export interface Contact {
   pinned: boolean;
   unreadCount: number;
   muted: boolean;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-  parsedTags?: ParsedTags;
-  optionChosen?: string;
-}
-
-export interface ParsedTags {
-  maintext: string;
-  options: string[];
-  sum?: string;
-}
-
-export interface ChatSession {
-  id: string;
-  contactId: string;
-  messages: ChatMessage[];
-  createdAt: number;
-  updatedAt: number;
 }
 
 export interface Moment {
