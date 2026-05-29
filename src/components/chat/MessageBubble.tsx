@@ -9,86 +9,107 @@ interface Props {
   avatarSrc?: string;
   avatarName?: string;
   avatarGradient?: string;
+  /** Whether to show the avatar (only first message in consecutive sequence) */
+  showAvatar?: boolean;
+  /** Whether this is a consecutive message from the same sender */
+  isConsecutive?: boolean;
   onBacktrack?: () => void;
   onDelete?: () => void;
 }
 
-export default function MessageBubble({ message, avatarSrc, avatarName, avatarGradient, onBacktrack, onDelete }: Props) {
+export default function MessageBubble({
+  message, avatarSrc, avatarName, avatarGradient,
+  showAvatar = true, isConsecutive = false,
+  onBacktrack, onDelete,
+}: Props) {
   const isUser = message.role === 'user';
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const settings = useAppStore(s => s.settings);
-  const userAvatar = settings.userAvatar;
 
+  // ===== USER MESSAGE (right side, no avatar in WeChat style) =====
   if (isUser) {
     return (
-      <div className="flex justify-end items-start gap-2 mb-3 message-animate px-4"
-           onMouseEnter={() => setShowActions(true)} onMouseLeave={() => setShowActions(false)}>
+      <div
+        className={`flex justify-end items-start mb-0 message-animate px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => setShowActions(false)}
+      >
         <div className="max-w-[65%]">
-          <div className="chat-bubble-user relative">
+          <div className="chat-bubble-user relative group">
             <p className="whitespace-pre-wrap text-body">{message.content}</p>
           </div>
           {showActions && (
             <div className="flex justify-end gap-1 mt-0.5">
               {onBacktrack && (
-                <button onClick={onBacktrack} className="text-small text-wechat-text-light hover:text-wechat-green transition-colors">↩ 回溯</button>
+                <button
+                  onClick={onBacktrack}
+                  className="text-small text-wechat-text-light hover:text-wechat-green transition-colors"
+                >
+                  ↩ 回溯
+                </button>
               )}
               {onDelete && (
-                <button onClick={onDelete} className="text-small text-wechat-text-light hover:text-wechat-danger transition-colors">删除</button>
+                <button
+                  onClick={onDelete}
+                  className="text-small text-wechat-text-light hover:text-wechat-danger transition-colors flex items-center gap-0.5"
+                >
+                  <Trash2 size={10} /> 删除
+                </button>
               )}
             </div>
           )}
         </div>
-        {/* User avatar — right side */}
-        <Avatar
-          size="sm"
-          name={settings.userName || '我'}
-          gradient="linear-gradient(135deg, #07c160, #06ad56)"
-          src={userAvatar}
-        />
       </div>
     );
   }
 
-  // Assistant message
+  // ===== AI / Assistant message (left side, with avatar) =====
   const parsed = message.parsed;
   const hasThinking = parsed?.thinking && parsed.thinking.trim();
   const chats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
 
   return (
-    <div className="flex justify-start items-start gap-2 mb-3 message-animate px-4"
-         onMouseEnter={() => setShowActions(true)} onMouseLeave={() => setShowActions(false)}>
-      {/* AI avatar — left side */}
-      <Avatar
-        size="sm"
-        name={avatarName || 'AI'}
-        gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
-        src={avatarSrc}
-      />
+    <div
+      className={`flex justify-start items-start gap-2 mb-0 message-animate px-4 ${isConsecutive ? 'message-consecutive' : 'mt-3'}`}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
+    >
+      {/* AI Avatar — only shown on first message in sequence */}
+      <div className="flex-shrink-0" style={{ width: 32, height: 32 }}>
+        {showAvatar && (
+          <Avatar
+            size="sm"
+            name={avatarName || 'AI'}
+            gradient={avatarGradient || 'linear-gradient(135deg, #667eea, #764ba2)'}
+            src={avatarSrc}
+          />
+        )}
+      </div>
 
-      <div className="max-w-[75%]">
+      <div className="max-w-[65%]">
+        {/* Thinking fold */}
+        {hasThinking && showAvatar && (
+          <div className="mb-1">
+            <button
+              id={`thinking-toggle-${message.id}`}
+              onClick={() => setThinkingOpen(!thinkingOpen)}
+              className="flex items-center gap-1 text-small text-wechat-text-gray hover:text-wechat-green transition-colors"
+            >
+              <Brain size={11} />
+              <span>思考过程</span>
+              {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+            </button>
+            {thinkingOpen && (
+              <div className="mt-1 p-2 bg-gray-50 rounded text-small text-wechat-text-gray leading-relaxed border-l-2 border-wechat-green">
+                {parsed!.thinking}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Chat messages — each as a WeChat bubble */}
         <div className="space-y-1">
-          {/* Thinking fold */}
-          {hasThinking && (
-            <div className="mb-1">
-              <button
-                id={`thinking-toggle-${message.id}`}
-                onClick={() => setThinkingOpen(!thinkingOpen)}
-                className="flex items-center gap-1 text-small text-wechat-text-gray hover:text-wechat-green transition-colors"
-              >
-                <Brain size={11} />
-                <span>思考过程</span>
-                {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-              </button>
-              {thinkingOpen && (
-                <div className="mt-1 p-2 bg-gray-50 rounded text-small text-wechat-text-gray leading-relaxed border-l-2 border-wechat-green">
-                  {parsed!.thinking}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Chat messages — each one is a separate WeChat bubble */}
           {chats ? (
             chats.map((chat, i) => (
               <ChatBubble key={i} chat={chat} />
@@ -102,8 +123,11 @@ export default function MessageBubble({ message, avatarSrc, avatarName, avatarGr
 
         {/* Actions on hover */}
         {showActions && onDelete && (
-          <div className="flex gap-1 mt-0.5 ml-0">
-            <button onClick={onDelete} className="text-small text-wechat-text-light hover:text-wechat-danger transition-colors flex items-center gap-0.5">
+          <div className="flex gap-1 mt-0.5">
+            <button
+              onClick={onDelete}
+              className="text-small text-wechat-text-light hover:text-wechat-danger transition-colors flex items-center gap-0.5"
+            >
               <Trash2 size={10} /> 删除
             </button>
           </div>

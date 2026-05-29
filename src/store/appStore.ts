@@ -220,12 +220,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().sendMessage(option);
   },
 
-  deleteMessage: (chatId, messageId) => set(s => ({
-    chats: s.chats.map(c => c.id === chatId
+  deleteMessage: (chatId, messageId) => set(s => {
+    const chat = s.chats.find(c => c.id === chatId);
+    if (!chat) return s;
+
+    const historyBookId = `lb-history-${chat.contactId}`;
+    const updatedChats = s.chats.map(c => c.id === chatId
       ? { ...c, messages: c.messages.filter(m => m.id !== messageId), updatedAt: Date.now() }
       : c
-    ),
-  })),
+    );
+
+    // Also remove corresponding lorebook entry
+    const updatedLorebooks = s.lorebooks.map(lb => {
+      if (lb.id !== historyBookId) return lb;
+      return {
+        ...lb,
+        entries: lb.entries.filter(e => e.comment !== messageId && e.id !== `he-${messageId}`),
+        updatedAt: Date.now(),
+      };
+    });
+
+    return { chats: updatedChats, lorebooks: updatedLorebooks };
+  }),
 
   moments: presetMoments,
   addMoment: (moment) => set(s => ({ moments: [moment, ...s.moments] })),
@@ -274,7 +290,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? st.activeLorebookIds.filter((aid) => aid !== id)
       : [...st.activeLorebookIds, id],
   })),
-  updateLorebook: (lb) => set((st) => ({ lorebooks: st.lorebooks.map((b) => (b.id === lb.id ? lb : b)) })),
+  updateLorebook: (lb) => set((st) => {
+    // Check if this is a history lorebook → sync to chat
+    if (lb.id.startsWith('lb-history-')) {
+      const contactId = lb.id.replace('lb-history-', '');
+      const chat = st.chats.find(c => c.contactId === contactId);
+      if (chat) {
+        const updatedChats = syncChatFromLorebook(st.chats, chat.id, lb);
+        return {
+          lorebooks: st.lorebooks.map((b) => (b.id === lb.id ? lb : b)),
+          chats: updatedChats,
+        };
+      }
+    }
+    return { lorebooks: st.lorebooks.map((b) => (b.id === lb.id ? lb : b)) };
+  }),
 
   // SillyTavern Presets
   presets: [{ ...createDefaultPreset(), id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() }],
@@ -436,7 +466,7 @@ function extractTag(text: string, tag: string): string | null {
   return match ? match[1].trim() : null;
 }
 
-/** Finalize the message: add AI message, record history, update state */
+/** Finalize the message: add AI message, store full history in lorebook, update state */
 function finalizeMessage(
   get: () => AppState, set: any,
   chat: ChatSession, updatedChat: ChatSession,
@@ -449,6 +479,7 @@ function finalizeMessage(
     updatedAt: Date.now(),
   };
 
+  // Build complete history lorebook entries
   const historyBookId = `lb-history-${chat.contactId}`;
   const historyBooks = get().lorebooks;
   let historyBook = historyBooks.find(lb => lb.id === historyBookId);
@@ -456,25 +487,54 @@ function finalizeMessage(
     historyBook = {
       id: historyBookId,
       name: `对话记录 - ${characterName}`,
-      description: `与${characterName}的对话历史摘要。用于帮助AI记住之前的对话。`,
+      description: `与${characterName}的完整对话记录。AI 会读取这些记录来了解对话历史。你可以在这里编辑、删除或添加对话内容，修改会实时反映到聊天界面。`,
       recursiveScanning: false, caseSensitive: false, matchWholeWords: false,
       createdAt: Date.now(), updatedAt: Date.now(),
       entries: [],
     };
   }
 
-  const se = createDefaultEntry();
-  se.keys = ['对话', '历史', '之前', '上次', '回顾', characterName, '聊天记录'];
-  se.content = `【对话记录 - ${new Date().toLocaleString('zh-CN')}】
-用户说："${userContent.slice(0, 80)}"
-${characterName}的回应摘要：${summary || '对话继续'}`;
-  se.order = Date.now();
-  se.constant = false;
-  se.position = 'after_char';
+  const userName = get().settings.userName || '用户';
+  const now = Date.now();
+
+  // Remove previous entries for the same messages (avoid duplicates)
+  const existingMsgIds = new Set([...updatedChat.messages.map(m => m.id)]);
+  const cleanEntries = historyBook.entries.filter(e => {
+    const msgId = extractMsgIdFromEntry(e);
+    return msgId ? existingMsgIds.has(msgId) : true;
+  });
+
+  // Create lorebook entries for ALL messages in the conversation (complete history)
+  const allMessages = [...finalChat.messages];
+  const messageEntries: LorebookEntry[] = allMessages.map(msg => {
+    const isUser = msg.role === 'user';
+    const roleLabel = isUser ? userName : characterName;
+    const roleEmoji = isUser ? '👤' : '🤖';
+    const timeStr = new Date(msg.timestamp).toLocaleString('zh-CN');
+    const header = `【${roleEmoji} ${roleLabel} · ${timeStr}】`;
+    const entryContent = `${header}\n${msg.content}`;
+
+    const se = createDefaultEntry();
+    se.id = `he-${msg.id}`;  // Use predictable ID based on message ID
+    se.keys = [isUser ? '用户' : characterName, '对话', '聊天记录', '历史', isUser ? `role-user` : `role-assistant`];
+    se.content = entryContent;
+    se.comment = msg.id;  // Store message ID for bidirectional sync
+    se.order = msg.timestamp;
+    se.constant = true;   // Always include in AI context
+    se.position = 'after_char';
+    se.probability = 100;
+    return se;
+  });
+
+  // Also merge entries that were manually added by user (no matching messageId)
+  const manualEntries = cleanEntries.filter(e => {
+    const msgId = extractMsgIdFromEntry(e);
+    return !msgId || !allMessages.find(m => m.id === msgId);
+  });
 
   const updatedHistoryBook = {
     ...historyBook,
-    entries: [...historyBook.entries.slice(-19), se],
+    entries: [...messageEntries, ...manualEntries],
     updatedAt: Date.now(),
   };
 
@@ -483,13 +543,106 @@ ${characterName}的回应摘要：${summary || '对话继续'}`;
     isStreaming: false,
     streamedText: '',
     currentOptions: [],
-    lorebooks: historyBook.entries.length === 0
-      ? [...s.lorebooks.filter(lb => lb.id !== historyBookId), updatedHistoryBook]
-      : s.lorebooks.map(lb => lb.id === historyBookId ? updatedHistoryBook : lb),
+    lorebooks: s.lorebooks.some(lb => lb.id === historyBookId)
+      ? s.lorebooks.map(lb => lb.id === historyBookId ? updatedHistoryBook : lb)
+      : [...s.lorebooks, updatedHistoryBook],
     activeLorebookIds: s.activeLorebookIds.includes(historyBookId)
       ? s.activeLorebookIds
       : [...s.activeLorebookIds, historyBookId],
   }));
+}
+
+/** Extract message ID from a lorebook entry's comment field */
+function extractMsgIdFromEntry(entry: LorebookEntry): string | null {
+  return entry.comment || null;
+}
+
+/** Parse message role from a lorebook entry */
+function extractRoleFromEntry(entry: LorebookEntry): 'user' | 'assistant' {
+  if (entry.keys.includes('role-user')) return 'user';
+  return 'assistant';
+}
+
+/** Extract message content from a lorebook entry (remove the header line) */
+function extractContentFromEntry(entry: LorebookEntry): string {
+  const lines = entry.content.split('\n');
+  // First line is the header 【👤 Name · time】
+  if (lines.length > 0 && lines[0].startsWith('【')) {
+    return lines.slice(1).join('\n').trim();
+  }
+  return entry.content;
+}
+
+/** Sync chat messages from a history lorebook */
+function syncChatFromLorebook(
+  chats: ChatSession[],
+  chatId: string,
+  lorebook: Lorebook,
+): ChatSession[] {
+  return chats.map(chat => {
+    if (chat.id !== chatId) return chat;
+
+    // Build messages from lorebook entries (only entries with valid messageId)
+    const syncedMessages: ChatMessage[] = [];
+    const entries = [...lorebook.entries]
+      .filter(e => e.comment && e.comment.trim())
+      .sort((a, b) => a.order - b.order);
+
+    for (const entry of entries) {
+      const msgId = extractMsgIdFromEntry(entry);
+      if (!msgId) continue;
+
+      const existingMsg = chat.messages.find(m => m.id === msgId);
+      const content = extractContentFromEntry(entry);
+      const role = extractRoleFromEntry(entry);
+
+      if (existingMsg) {
+        // Update existing message content if changed
+        if (existingMsg.content !== content || existingMsg.role !== role) {
+          syncedMessages.push({ ...existingMsg, content, role });
+        } else {
+          syncedMessages.push(existingMsg);
+        }
+      } else {
+        // New entry from lorebook → create chat message
+        syncedMessages.push({
+          id: msgId,
+          role,
+          content,
+          timestamp: entry.order || Date.now(),
+        });
+      }
+    }
+
+    // Add manually-created entries (no messageId in comment) as system/assistant messages
+    const manualEntries = lorebook.entries
+      .filter(e => !e.comment || !e.comment.trim())
+      .sort((a, b) => a.order - b.order);
+
+    for (const entry of manualEntries) {
+      // Check if this manual entry already has a corresponding chat message
+      const existingMsg = chat.messages.find(m => m.id === entry.id);
+      if (existingMsg) {
+        // Update existing message
+        const content = extractContentFromEntry(entry);
+        if (existingMsg.content !== content) {
+          syncedMessages.push({ ...existingMsg, content });
+        } else {
+          syncedMessages.push(existingMsg);
+        }
+      } else {
+        // New manual entry → create message
+        syncedMessages.push({
+          id: entry.id,
+          role: 'assistant',
+          content: extractContentFromEntry(entry),
+          timestamp: entry.order || Date.now(),
+        });
+      }
+    }
+
+    return { ...chat, messages: syncedMessages, updatedAt: Date.now() };
+  });
 }
 
 // Tavern-style fallback reply generator — chat format

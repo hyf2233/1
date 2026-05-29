@@ -63,7 +63,7 @@ export default function ChatList() {
                 isActive ? 'bg-wechat-green-light' : ''
               }`}
             >
-              <Avatar gradient={contact.avatar} name={contact.name} size="lg" unreadCount={contact.unreadCount} />
+              <Avatar gradient={contact.avatar} name={contact.name} size="lg" unreadCount={contact.unreadCount} src={contact.avatarType === 'image' ? contact.avatarImage : undefined} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-body font-medium truncate">{contact.name}</span>

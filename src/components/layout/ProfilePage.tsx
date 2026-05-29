@@ -55,7 +55,7 @@ export default function ProfilePage() {
             onUpload={(dataUrl) => updateSettings({ ...settings, userAvatar: dataUrl })}
           />
           <div className="flex-1">
-            <h2 className="text-subtitle font-semibold">我的名字</h2>
+            <h2 className="text-subtitle font-semibold">{settings.userName || '我'}</h2>
             <p className="text-small text-wechat-text-gray mt-0.5">微信号: adventures_2026</p>
           </div>
           <ChevronRight size={18} className="text-wechat-text-light" />

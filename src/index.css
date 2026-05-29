@@ -21,10 +21,40 @@
     @apply text-wechat-green;
   }
   .chat-bubble-user {
-    @apply bg-wechat-bubble rounded-sm px-3 py-2 max-w-[70%] text-body ml-auto;
+    @apply bg-wechat-bubble px-3 py-2 max-w-[65%] text-body ml-auto relative;
+    border-radius: 6px;
+  }
+  /* Bubble tail for user messages (right side) */
+  .chat-bubble-user::before {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: 10px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid #95EC69;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
   }
   .chat-bubble-other {
-    @apply bg-white rounded-sm px-3 py-2 max-w-[85%] text-body;
+    @apply bg-white px-3 py-2 max-w-[65%] text-body relative;
+    border-radius: 6px;
+  }
+  /* Bubble tail for other messages (left side) */
+  .chat-bubble-other::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 10px;
+    width: 0;
+    height: 0;
+    border-right: 6px solid #fff;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+  /* Consecutive messages — tighter spacing */
+  .message-consecutive {
+    margin-top: 2px !important;
   }
   .option-btn {
     @apply w-full text-center py-2.5 px-4 rounded-sm border text-body cursor-pointer

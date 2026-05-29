@@ -59,7 +59,7 @@ export default function ContactList() {
               <div key={c.id} id={`contact-${c.id}`}
                 onClick={() => setSelectedId(c.id)}
                 className="flex items-center gap-3 px-4 py-2.5 hover:bg-wechat-bg cursor-pointer transition-colors border-b border-wechat-divider last:border-0">
-                <Avatar gradient={c.avatar} name={c.name} size="lg" />
+                <Avatar gradient={c.avatar} name={c.name} size="lg" src={c.avatarType === 'image' ? c.avatarImage : undefined} />
                 <div className="flex-1">
                   <p className="text-body">{c.name}</p>
                   {c.tags && <p className="text-small text-wechat-text-gray">{c.tags.join(' · ')}</p>}

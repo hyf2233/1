@@ -75,28 +75,35 @@ export default function ChatDetail() {
 
       {/* Messages area — WeChat style with #EDEDED background */}
       <div className="flex-1 overflow-y-auto py-2 flex flex-col bg-[#EDEDED]" id="chat-messages-container">
-        {chat.messages.map(msg => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            avatarSrc={aiAvatarSrc}
-            avatarName={contact.name}
-            avatarGradient={contact.avatar}
-            onBacktrack={msg.role === 'user' ? () => backtrackTo(msg.id) : undefined}
-            onDelete={() => handleDelete(msg.id)}
-          />
-        ))}
+        {chat.messages.map((msg, idx, arr) => {
+          const prevMsg = idx > 0 ? arr[idx - 1] : null;
+          const isConsecutive = prevMsg?.role === msg.role;
+          const showAvatar = msg.role === 'assistant' && !isConsecutive;
+          return (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              avatarSrc={aiAvatarSrc}
+              avatarName={contact.name}
+              avatarGradient={contact.avatar}
+              showAvatar={showAvatar}
+              isConsecutive={isConsecutive}
+              onBacktrack={msg.role === 'user' ? () => backtrackTo(msg.id) : undefined}
+              onDelete={() => handleDelete(msg.id)}
+            />
+          );
+        })}
 
         {/* Streaming text */}
         {isStreaming && streamedText && (
-          <div className="flex justify-start items-start gap-2 mb-3 message-animate px-4">
+          <div className="flex justify-start items-start gap-2 message-animate px-4 mt-3">
             <Avatar
               size="sm"
               name={contact.name}
               gradient={contact.avatar}
               src={aiAvatarSrc}
             />
-            <div className="chat-bubble-other max-w-[75%]">
+            <div className="chat-bubble-other max-w-[65%]">
               <p className="whitespace-pre-wrap leading-relaxed text-body">
                 {stripXmlTags(streamedText)}
                 <span className="inline-block w-[2px] h-[1.1em] bg-wechat-green ml-0.5 align-middle animate-pulse" />
@@ -107,7 +114,7 @@ export default function ChatDetail() {
 
         {/* Typing indicator */}
         {isStreaming && !streamedText && (
-          <div className="flex justify-start items-start gap-2 mb-3 px-4">
+          <div className="flex justify-start items-start gap-2 px-4 mt-3">
             <Avatar size="sm" name={contact.name} gradient={contact.avatar} src={aiAvatarSrc} />
             <div className="chat-bubble-other px-4 py-3">
               <div className="flex gap-1.5">
