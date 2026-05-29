@@ -102,7 +102,9 @@ export default function ChatInput() {
 
   const buildChatEntry = (): ChatEntry | null => {
     const content = input.trim() || getPlaceholderContent();
-    let entry: ChatEntry = { type: activeType, content };
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    let entry: ChatEntry = { type: activeType, content, time: timeStr };
 
     switch (activeType) {
       case 'voice':

@@ -149,27 +149,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     const activeLorebooks = lorebooks.filter(lb => activeLorebookIds.includes(lb.id));
     const presetSettings = activePreset.settings;
 
-    // Build user message — support typed messages via chatEntryOverride
+    // Build user message — always store with parsed.chats
+    const now = new Date();
+    const entryTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: chatEntryOverride ? chatEntryOverride.content : content,
       timestamp: Date.now(),
-    };
-
-    // If user sent a typed message (voice, video, etc.), store parsed.chats
-    if (chatEntryOverride && chatEntryOverride.type !== 'text') {
-      userMsg.parsed = {
+      parsed: {
         thinking: '',
         maintext: content,
         options: [],
-        chats: [chatEntryOverride],
+        chats: chatEntryOverride
+          ? [{ ...chatEntryOverride, time: chatEntryOverride.time || entryTime }]
+          : [{ type: 'text', content, time: entryTime }],
         sum: '',
         varsRaw: '',
         varsCommands: { merge: get().gameState },
         unknown: {},
-      };
-    }
+      },
+    };
 
     const updatedChat = {
       ...chat,
@@ -676,17 +676,22 @@ function messageToLorebookEntry(
   // Build header with metadata
   const header = `【${roleEmoji} ${roleName} · ${timeStr}】`;
 
-  // Store chat entries as re-parseable XML so types survive lorebook roundtrip
+  // Store chat entries as re-parseable XML with full type+content+time
   let contentBody = msg.content;
+  // Derive time from message timestamp for entries that lack it
+  const msgDate = new Date(msg.timestamp);
+  const defaultTime = `${String(msgDate.getHours()).padStart(2, '0')}:${String(msgDate.getMinutes()).padStart(2, '0')}`;
+
   if (msg.parsed?.chats && msg.parsed.chats.length > 0) {
-    // Has explicit parsed chat entries → serialize to XML
-    contentBody = chatEntriesToXml(msg.parsed.chats, '\n');
+    // Ensure every entry has time
+    const withTime = msg.parsed.chats.map(c => c.time ? c : { ...c, time: defaultTime });
+    contentBody = chatEntriesToXml(withTime, '\n');
   } else {
-    // Try to parse content as XML — if it already contains <chat> tags, preserve them
+    // Try to parse content as XML
     const parsed = parseChatEntriesFromXml(msg.content);
     if (parsed.length > 0) {
-      // Content already has XML chat entries, keep in XML format
-      contentBody = chatEntriesToXml(parsed, '\n');
+      const withTime = parsed.map(c => c.time ? c : { ...c, time: defaultTime });
+      contentBody = chatEntriesToXml(withTime, '\n');
     }
   }
 
