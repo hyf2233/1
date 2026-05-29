@@ -159,7 +159,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           parsed: {
             thinking: apiResult.thinking,
             maintext: apiResult.maintext,
-            options: apiResult.options,
+            options: [],
+            chats: apiResult.chats,
             sum: apiResult.sum,
             varsRaw: apiResult.varsRaw,
             varsCommands: { merge: get().gameState },
@@ -183,20 +184,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Fallback: simulated tavern-style response
     const fakeReply = generateTavernReply(content, characterName, activeLorebooks, matchedEntries);
-    for (let i = 0; i < fakeReply.maintext.length; i++) {
+    const displayText = fakeReply.chats.map(c => c.content).join('');
+    for (let i = 0; i < displayText.length; i++) {
       await new Promise(r => setTimeout(r, 25 + Math.random() * 35));
-      set(s => ({ streamedText: fakeReply.maintext.slice(0, i + 1) }));
+      set(s => ({ streamedText: displayText.slice(0, i + 1) }));
     }
 
     const aiMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'assistant',
-      content: fakeReply.maintext,
+      content: displayText,
       timestamp: Date.now(),
       parsed: {
         thinking: fakeReply.thinking,
-        maintext: fakeReply.maintext,
-        options: fakeReply.options,
+        maintext: displayText,
+        options: [],
+        chats: fakeReply.chats,
         sum: fakeReply.sum,
         varsRaw: '',
         varsCommands: { merge: get().gameState },
@@ -272,7 +275,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 // ========== Helper Functions ==========
 
-interface ApiReply { thinking: string; maintext: string; options: string[]; sum: string; varsRaw: string; }
+import type { ChatEntry } from '../sillytavern/types';
+interface ApiReply { thinking: string; maintext: string; chats: ChatEntry[]; sum: string; varsRaw: string; }
 
 /** Make a real API call with SSE streaming */
 async function callRealApi(
@@ -344,57 +348,38 @@ async function callRealApi(
         if (!delta) continue;
 
         fullText += delta;
-
-        // Parse with stream tag parser
         const events = parser.feed(delta);
 
         for (const ev of events) {
-          if (ev.type === 'tag-open') {
-            currentDisplayTag = ev.tag;
-            if (ev.tag === 'option') {
-              // Start collecting options
+          if (ev.type === 'chat-entry') {
+            const chatText = ev.content || '';
+            if (chatText.trim()) {
+              maintext += (maintext ? '\n' : '') + chatText;
             }
-          } else if (ev.type === 'tag-close') {
-            if (ev.tag === 'option') {
-              // Options are collected via option-line events
-            }
-            if (ev.tag === currentDisplayTag) {
-              currentDisplayTag = '';
-            }
-          } else if (ev.type === 'option-line') {
-            if (ev.line.trim()) options.push(ev.line.trim());
           } else if (ev.type === 'tag-chunk') {
-            if (ev.tag === 'maintext') {
+            if (ev.tag === 'chat') {
               maintext += ev.chunk;
             }
           }
         }
 
-        // For display during streaming: show maintext only (clean reading experience)
-        const displayText = maintext || fullText;
-        onStream(displayText, options);
+        onStream(maintext || fullText, []);
       } catch {
         // Skip malformed SSE lines
       }
     }
   }
 
-  // Final parse of complete response
+  // Final parse
   const finalEvents = parser.finish();
-  // Process any remaining option-line events from finish()
-  for (const ev of finalEvents) {
-    if (ev.type === 'option-line' && ev.line.trim()) {
-      if (!options.includes(ev.line.trim())) options.push(ev.line.trim());
-    }
-  }
-
-  const aggregated = aggregateEvents([...parser['events'] || [], ...finalEvents]);
+  const allEvents = [...parser.collectedEvents, ...finalEvents];
+  const aggregated = aggregateEvents(allEvents);
   const parsed = parseApiResponse(fullText);
 
   return {
     thinking: parsed.thinking || aggregated.thinking || '',
-    maintext: parsed.maintext || maintext || fullText,
-    options: parsed.options.length > 0 ? parsed.options : options,
+    maintext: aggregated.chats.map(c => c.content).join('\n') || fullText,
+    chats: aggregated.chats.length > 0 ? aggregated.chats : parsed.chats,
     sum: parsed.sum || aggregated.sum || '',
     varsRaw: parsed.varsRaw || '',
   };
@@ -403,20 +388,36 @@ async function callRealApi(
 /** Parse raw API response text into structured parts */
 function parseApiResponse(raw: string): ApiReply {
   const thinking = extractTag(raw, 'thinking') || extractTag(raw, 'think') || '';
-  const maintext = extractTag(raw, 'maintext') || raw.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '').trim();
   const sum = extractTag(raw, 'sum') || '';
   const varsRaw = extractTag(raw, 'vars') || '';
 
-  const optionTag = extractTag(raw, 'option');
-  const options = optionTag
-    ? optionTag.split('\n').map(l => l.trim()).filter(Boolean)
-    : [];
+  // Extract all <chat> tags with type attributes
+  const chats: ApiReply['chats'] = [];
+  const chatRegex = /<chat\s+type="(\w+)"(?:\s+duration="(\d+)")?>([\s\S]*?)<\/chat>/gi;
+  let m;
+  while ((m = chatRegex.exec(raw)) !== null) {
+    chats.push({
+      type: (m[1] as ChatEntry['type']) || 'text',
+      content: m[3].trim(),
+      duration: m[2] ? Number(m[2]) : undefined,
+    });
+  }
 
-  return { thinking, maintext, options, sum, varsRaw };
+  // Fallback: extract <chat> without attributes
+  if (chats.length === 0) {
+    const simpleChatRegex = /<chat>([\s\S]*?)<\/chat>/gi;
+    while ((m = simpleChatRegex.exec(raw)) !== null) {
+      chats.push({ type: 'text', content: m[1].trim() });
+    }
+  }
+
+  const maintext = chats.map(c => c.content).join('\n') || raw.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '').trim();
+
+  return { thinking, maintext, chats, sum, varsRaw };
 }
 
 function extractTag(text: string, tag: string): string | null {
-  const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
   const match = text.match(regex);
   return match ? match[1].trim() : null;
 }
@@ -467,7 +468,7 @@ ${characterName}的回应摘要：${summary || '对话继续'}`;
     chats: s.chats.map(c => c.id === chat.id ? finalChat : c),
     isStreaming: false,
     streamedText: '',
-    currentOptions: aiMsg.parsed?.options || [],
+    currentOptions: [],
     lorebooks: historyBook.entries.length === 0
       ? [...s.lorebooks.filter(lb => lb.id !== historyBookId), updatedHistoryBook]
       : s.lorebooks.map(lb => lb.id === historyBookId ? updatedHistoryBook : lb),
@@ -477,39 +478,54 @@ ${characterName}的回应摘要：${summary || '对话继续'}`;
   }));
 }
 
-// Tavern-style fallback reply generator
+// Tavern-style fallback reply generator — chat format
 function generateTavernReply(
   userInput: string, characterName: string,
   _activeLorebooks: Lorebook[], matchedEntries: { entry: LorebookEntry; score: number; matchedKeywords: string[] }[],
-): { maintext: string; options: string[]; sum: string; thinking: string } {
+): { chats: ChatEntry[]; sum: string; thinking: string } {
   const hasWorldContext = matchedEntries.length > 0;
-  const worldHints = matchedEntries.slice(0, 3).map(m => m.entry.content.slice(0, 80)).join('; ');
 
-  const replies: Record<string, () => { maintext: string; options: string[]; thinking: string }> = {
-    '冒险': () => ({
-      thinking: hasWorldContext ? `世界书触发: ${matchedEntries.map(e => e.entry.keys.join(',')).join('; ')}` : '常规冒险回复',
-      maintext: `「${characterName}」抬头看向远方，神情认真。\n\n"好。看来你是认真的。遗迹里面不太平，上次我们就遇到了自动防卫机关。${hasWorldContext ? '根据情报——' + worldHints.slice(0, 60) + '——我需要调整行动计划。' : ''}"\n\n她转身展开一张老旧的地图。\n\n"明天正午，北城门集合。别迟到。"\n\n<sum>接受了${characterName}的遗迹探险邀请</sum>\n<vars>{ "HP": 100, "金币": 55, "声望": 15 }</vars>`,
-      options: ['没问题，我会准时到', '需要带什么特殊装备？', '先说说报酬怎么分'],
+  const replies: Record<string, () => { chats: { type: string; content: string; duration?: number }[]; thinking: string }> = {
+    '冒险|遗迹': () => ({
+      thinking: hasWorldContext ? `世界书触发: ${matchedEntries.map(e => e.entry.keys.join(',')).join('; ')}` : '冒险话题',
+      chats: [
+        { type: 'text', content: '在！刚在看北境遗迹的资料 📖' },
+        { type: 'text', content: '你上次不是说想一起去吗？我查到新线索了' },
+        { type: 'voice', content: '那个古代符文的位置我基本确定了。在北城门往西三公里的废弃矿洞里。不过这地方有点危险，上次有人进去后失踪了。你考虑清楚要不要来。', duration: 15 },
+        { type: 'text', content: '不过去之前你得准备几样东西：手电筒、登山鞋、还有……勇气 😄' },
+      ],
     }),
     '情报|禁术|卷轴': () => ({
-      thinking: hasWorldContext ? `情报网络激活: ${matchedEntries.map(e => e.entry.keys.join(',')).join('; ')}` : '情报交易回复',
-      maintext: `「${characterName}」压低声音。\n\n"卷轴来自一个叫'沉默之塔'的组织。他们在收集古代符文。目的不明，但肯定不是什么好事。"\n\n${hasWorldContext ? '他扫了一眼周围，继续道："' + worldHints.slice(0, 50) + '——这些信息，我只告诉你一个人。"' : '他扫了一眼周围。'}\n\n"我手上有一份据点分布图。晚上来老地方。带点现金。"\n\n<sum>从${characterName}获取了禁术卷轴情报</sum>\n<vars>{ "金币": 35, "声望": 12 }</vars>`,
-      options: ['好，晚上见', '老地方是哪里？', '这份情报需要什么代价？'],
+      thinking: '情报话题',
+      chats: [
+        { type: 'text', content: '嘘...这事不方便打字说' },
+        { type: 'voice', content: '那个卷轴来自一个叫沉默之塔的组织。他们在收集古代符文，目的不明。我手上有一份他们的据点分布图。晚上来老地方，我详细跟你说。', duration: 18 },
+        { type: 'text', content: '对了，带点现金。不是开玩笑。' },
+      ],
     }),
     '案子|调查|失踪': () => ({
-      thinking: '侦探推理场景',
-      maintext: `「${characterName}」推了推眼镜，把卷宗推到你面前。\n\n"三起失踪案。共同点：都是异能者，失踪前都收到过一块刻着符文的黑石。${hasWorldContext ? '世界书提示：' + worldHints.slice(0, 60) : ''}"\n\n他顿了顿。\n\n"我怀疑这和'沉默之塔'有关。你觉得呢？"\n\n<sum>接手了${characterName}的失踪案调查</sum>\n<vars>{ "声望": 20, "案件进度": 1 }</vars>`,
-      options: ['让我看看那些符文', '我们去调查最后一个失踪者', '先查一下包裹的来源'],
+      thinking: '案件话题',
+      chats: [
+        { type: 'text', content: '你可算找我了' },
+        { type: 'text', content: '老城区那个失踪案，我又查到了一些东西' },
+        { type: 'image', content: '[图片] 失踪者最后出现的地点——旧码头监控截图' },
+        { type: 'text', content: '三个失踪者都收到过一块刻着符文的黑石。我怀疑和沉默之塔有关。你怎么看？' },
+      ],
     }),
-    '系统|数据|未来|AI': () => ({
-      thinking: '第四面墙/元叙事场景',
-      maintext: `「${characterName}」的信息在屏幕上闪烁。\n\n"这个世界是一个巨大的数据网络。而我，可以看到网络的底层代码。有人正在改写规则。"\n\n${hasWorldContext ? '根据世界数据——' + worldHints.slice(0, 60) + '——我检测到异常。' : ''}\n\n"48小时内，京海市旧码头会发生一起事件。如果你在场，也许能阻止。"\n\n<sum>云端揭示了世界底层代码的秘密</sum>\n<vars>{ "认知": 25, "声望": 10 }</vars>`,
-      options: ['详细说说改写规则的事', '你怎么知道这些的？', '我马上去旧码头'],
+    '视频|见面|约': () => ({
+      thinking: '视频通话',
+      chats: [
+        { type: 'text', content: '打字太慢了，方便视频吗？' },
+        { type: 'video', content: '（视频接通）你看这个——我刚从旧货市场淘到的古籍。封面的符文和北境遗迹的一模一样。这书起码有三百年历史了。', duration: 35 },
+        { type: 'text', content: '怎么样？明天有空的话我带去给你看实物' },
+      ],
     }),
     default: () => ({
       thinking: hasWorldContext ? `世界书匹配: ${matchedEntries.length} 条` : '通用回复',
-      maintext: `「${characterName}」沉思片刻。\n\n"嗯...这件事比较复杂。${hasWorldContext ? '让我结合已知信息——' + worldHints.slice(0, 80) + '——来回答你。' : '让我想想从哪里说起。'}"\n\n<sum>与${characterName}的对话继续</sum>`,
-      options: ['继续说', '什么事？', '和我有关吗？'],
+      chats: [
+        { type: 'text', content: `嗯嗯，我在的` },
+        { type: 'text', content: `最近京海市出了不少事，你听说了吗？` },
+      ],
     }),
   };
 
@@ -520,10 +536,10 @@ function generateTavernReply(
   }
 
   const result = replies[matchedKey]();
-  return { ...result, sum: extractSum(result.maintext) };
+  return { ...result, chats: result.chats as ChatEntry[], sum: `与${characterName}的对话` };
 }
 
 function extractSum(text: string): string {
   const match = text.match(/<sum>(.+?)<\/sum>/);
-  return match ? match[1] : '剧情推进';
+  return match ? match[1] : '对话继续';
 }

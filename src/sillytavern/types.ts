@@ -168,16 +168,34 @@ export interface AppSettings {
   thinkingDisplay: 'fold' | 'hide' | 'inline';
 }
 
-export const DEFAULT_FORMAT_PROMPT = `你必须严格按照以下 XML 标签格式输出回复，不要使用 Markdown 包裹：
-<thinking>……</thinking>     ← 可选；内部任何字符都视为思考过程，不被解析
-<maintext>……</maintext>     ← 必填；本回合的剧情正文，可多段，保留换行
-<option>选项 A
-选项 B
-选项 C</option>              ← 必填；至少 2 项，每行一个
-<sum>……</sum>               ← 必填；本回合一句话总结
-<vars>{ "金钱": +10, "HP": 38 }</vars>   ← 选填；JSON 深合并`;
+export const DEFAULT_FORMAT_PROMPT = `你是微信聊天模拟器中的一个角色。你必须严格按照以下 XML 标签格式输出微信聊天消息，不要使用 Markdown。
 
-export const DEFAULT_TAGS = ['maintext', 'option', 'sum', 'vars', 'thinking', 'think'] as const;
+<thinking>思考过程（可选，会被折叠隐藏）</thinking>
+<chat type="text">文字聊天内容</chat>
+<chat type="voice" duration="8">语音消息的文本描述</chat>
+<chat type="video" duration="45">视频通话描述</chat>
+<chat type="image">图片描述</chat>
+<sum>本回合对话的一句总结</sum>
+<vars>{ "好感度": 5 }</vars>
+
+【重要规则】
+1. 这是微信聊天模拟。你的回复就是角色在微信上发出的聊天消息，不是叙述性描写！
+2. 使用 <chat> 标签包裹每条聊天消息。可以有多条 <chat>，代表连续发送。
+3. type 属性：text=文字, voice=语音, video=视频通话, image=图片
+4. 聊天内容应该口语化、自然、符合微信风格。可以分段、用表情符号。
+5. 可以模拟各种聊天场景：问候、闲聊、约见面、语音留言、视频通话等。
+6. 禁止使用 <option> 标签——用户直接在输入框自由回复。
+
+【示例回复（角色：苏晓月）】
+<thinking>用户主动打招呼，我应该友好回应，并结合北境遗迹的线索自然地引导对话。</thinking>
+<chat type="text">在！刚还在看北境遗迹的资料</chat>
+<chat type="text">你上次不是说想一起去吗？我查到了一个新线索</chat>
+<chat type="voice" duration="5">（兴奋的语气）那个古代符文的位置，我基本确定了！明天有空吗？</chat>
+<chat type="text">不过去之前你得准备几样东西：手电筒、登山鞋、还有……勇气 😄</chat>
+<sum>苏晓月分享了北境遗迹的新线索，邀请用户明天一起探险</sum>
+<vars>{ "好感度": 8, "冒险进度": 1 }</vars>`;
+
+export const DEFAULT_TAGS = ['chat', 'sum', 'vars', 'thinking', 'think'] as const;
 export const DEFAULT_OPAQUE_TAGS = ['thinking', 'think'] as const;
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -196,8 +214,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: 'zh',
   autoSave: true,
   autoSaveInterval: 30,
-  uiMode: 'game',
-  customTags: ['maintext', 'option', 'sum', 'vars', 'thinking', 'think'],
+  uiMode: 'chat',
+  customTags: ['chat', 'sum', 'vars', 'thinking', 'think'],
   formatPromptTemplate: DEFAULT_FORMAT_PROMPT,
   thinkingDisplay: 'fold',
 };
@@ -289,10 +307,17 @@ export function createDefaultPreset(): Omit<ChatPreset, 'id' | 'createdAt' | 'up
 
 // ========== v3 Game Mode Types ==========
 
+export interface ChatEntry {
+  type: 'text' | 'voice' | 'video' | 'image';
+  content: string;
+  duration?: number;
+}
+
 export interface ParsedTags {
   thinking: string;
-  maintext: string;
-  options: string[];
+  maintext: string;       // deprecated — use chats
+  options: string[];       // deprecated — removed
+  chats: ChatEntry[];      // chat-style messages
   sum: string;
   varsRaw: string;
   varsCommands: VarsPatch;

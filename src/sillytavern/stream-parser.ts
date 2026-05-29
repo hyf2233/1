@@ -11,10 +11,11 @@
  */
 
 export type ParserEvent =
-  | { type: 'tag-open'; tag: string }
+  | { type: 'tag-open'; tag: string; attrs?: Record<string, string> }
   | { type: 'tag-chunk'; tag: string; chunk: string }
-  | { type: 'tag-close'; tag: string; full: string }
+  | { type: 'tag-close'; tag: string; full: string; attrs?: Record<string, string> }
   | { type: 'option-line'; line: string }
+  | { type: 'chat-entry'; chatType: string; content: string; duration?: number }
   | { type: 'raw'; chunk: string };
 
 type State = 'NORMAL' | 'BUFFER_TAG' | 'TAGGED' | 'OPAQUE';
@@ -27,6 +28,7 @@ export class StreamTagParser {
   private currentTag = '';
   private currentBuf = '';
   private optionBuf = '';
+  private currentAttrs: Record<string, string> = {};
   private events: ParserEvent[] = [];
 
   constructor(
@@ -121,21 +123,34 @@ export class StreamTagParser {
     const tagText = this.partial;
     this.partial = '';
     const isClose = tagText.startsWith('/');
-    const name = isClose ? tagText.slice(1) : tagText;
+    const cleanTag = isClose ? tagText.slice(1) : tagText;
+
+    // Parse tag name and attributes (e.g., 'chat type="text" duration="5"')
+    const spaceIdx = cleanTag.indexOf(' ');
+    const name = spaceIdx > 0 ? cleanTag.slice(0, spaceIdx) : cleanTag;
+    const attrStr = spaceIdx > 0 ? cleanTag.slice(spaceIdx + 1) : '';
+    const attrs = parseAttrs(attrStr);
 
     if (isClose) {
       if (this.currentTag && this.currentTag === name) {
-        // Matching close for the open TAGGED tag we were inside before `<` triggered BUFFER_TAG.
         if (this.currentTag === 'option' && this.optionBuf) {
           this.events.push({ type: 'option-line', line: this.optionBuf });
           this.optionBuf = '';
         }
-        this.events.push({ type: 'tag-close', tag: this.currentTag, full: this.currentBuf });
+        if (this.currentTag === 'chat') {
+          this.events.push({
+            type: 'chat-entry',
+            chatType: this.currentAttrs['type'] || 'text',
+            content: this.currentBuf,
+            duration: this.currentAttrs['duration'] ? Number(this.currentAttrs['duration']) : undefined,
+          });
+        }
+        this.events.push({ type: 'tag-close', tag: this.currentTag, full: this.currentBuf, attrs: this.currentAttrs });
         this.currentBuf = '';
         this.currentTag = '';
+        this.currentAttrs = {};
         this.state = 'NORMAL';
       } else {
-        // Stray close for an unrelated tag; pass through as raw and return to NORMAL.
         this.events.push({ type: 'raw', chunk: `</${name}>` });
         this.state = 'NORMAL';
       }
@@ -143,15 +158,33 @@ export class StreamTagParser {
     }
 
     if (!this.tags.includes(name)) {
-      this.events.push({ type: 'raw', chunk: `<${name}>` });
+      this.events.push({ type: 'raw', chunk: `<${tagText}>` });
       this.state = 'NORMAL';
       return;
     }
 
     this.currentTag = name;
+    this.currentAttrs = attrs;
     this.currentBuf = '';
     this.optionBuf = '';
-    this.events.push({ type: 'tag-open', tag: name });
+    this.events.push({ type: 'tag-open', tag: name, attrs });
     this.state = this.opaqueTags.includes(name) ? 'OPAQUE' : 'TAGGED';
   }
+
+  /** Expose events for external aggregation after finish() */
+  get collectedEvents(): ParserEvent[] {
+    return this.events;
+  }
+}
+
+/** Parse HTML-like attributes from a string like 'type="text" duration="5"' */
+function parseAttrs(str: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  if (!str.trim()) return attrs;
+  const regex = /(\w+)=["']([^"']*)["']/g;
+  let m;
+  while ((m = regex.exec(str)) !== null) {
+    attrs[m[1]] = m[2];
+  }
+  return attrs;
 }

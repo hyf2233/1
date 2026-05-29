@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Smile, Send, Loader2 } from 'lucide-react';
+import { Smile, Send } from 'lucide-react';
 
 export default function ChatInput() {
   const [input, setInput] = useState('');
   const sendMessage = useAppStore(s => s.sendMessage);
   const isStreaming = useAppStore(s => s.isStreaming);
-  const currentOptions = useAppStore(s => s.currentOptions);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const hasText = input.trim().length > 0;
@@ -38,23 +37,6 @@ export default function ChatInput() {
 
   return (
     <div className="border-t border-wechat-divider bg-white px-4 py-3">
-      {/* Current options from last AI response */}
-      {currentOptions.length > 0 && (
-        <div className="flex gap-2 mb-3 flex-wrap">
-          {currentOptions.map((opt, i) => (
-            <button
-              key={i}
-              id={`option-${i}`}
-              onClick={() => { sendMessage(opt); }}
-              className="option-btn text-left"
-              disabled={isStreaming}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="flex items-end gap-3">
         <button
           id="emoji-btn"
@@ -83,9 +65,9 @@ export default function ChatInput() {
           <button
             id="stop-btn"
             className="p-1.5 flex-shrink-0 cursor-pointer hover:bg-gray-100 rounded transition-colors"
-            title="停止生成"
+            title="AI 回复中..."
           >
-            <div className="w-5 h-5 rounded-sm bg-wechat-danger" />
+            <div className="w-5 h-5 rounded-sm bg-wechat-danger animate-pulse" />
           </button>
         ) : (
           <button

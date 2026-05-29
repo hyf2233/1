@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ChatMessage } from '../../types';
-import { useAppStore } from '../../store/appStore';
-import { ChevronDown, ChevronRight, Brain, FileText, Hash } from 'lucide-react';
+import { ChevronDown, ChevronRight, Brain, Phone, Mic, Image, FileText } from 'lucide-react';
 
 interface Props {
   message: ChatMessage;
@@ -10,8 +9,6 @@ interface Props {
 
 export default function MessageBubble({ message, onBacktrack }: Props) {
   const isUser = message.role === 'user';
-  const sendMessage = useAppStore(s => s.sendMessage);
-  const isStreaming = useAppStore(s => s.isStreaming);
   const [thinkingOpen, setThinkingOpen] = useState(false);
 
   if (isUser) {
@@ -36,29 +33,23 @@ export default function MessageBubble({ message, onBacktrack }: Props) {
     );
   }
 
-  // Assistant message — render full SillyTavern XML tags
+  // Assistant — render chat-style messages
   const parsed = message.parsed;
   const hasThinking = parsed?.thinking && parsed.thinking.trim();
-  const hasMaintext = parsed?.maintext && parsed.maintext.trim();
-  const hasOptions = parsed?.options && parsed.options.length > 0;
+  const chats = parsed?.chats && parsed.chats.length > 0 ? parsed.chats : null;
   const hasSum = parsed?.sum && parsed.sum.trim();
-  const displayContent = hasMaintext ? parsed!.maintext : message.content;
-
-  const handleOptionClick = (option: string) => {
-    if (!isStreaming) sendMessage(option);
-  };
 
   return (
     <div className="flex justify-start mb-3 message-animate">
       <div className="max-w-[80%]">
-        <div className="chat-bubble-other">
+        <div className="space-y-1.5">
           {/* Thinking fold */}
           {hasThinking && (
-            <div className="mb-2">
+            <div className="mb-1">
               <button
                 id={`thinking-toggle-${message.id}`}
                 onClick={() => setThinkingOpen(!thinkingOpen)}
-                className="flex items-center gap-1.5 text-small text-wechat-text-gray hover:text-wechat-green transition-colors w-full text-left"
+                className="flex items-center gap-1.5 text-small text-wechat-text-gray hover:text-wechat-green transition-colors"
               >
                 <Brain size={12} />
                 <span className="font-medium">思考过程</span>
@@ -72,51 +63,77 @@ export default function MessageBubble({ message, onBacktrack }: Props) {
             </div>
           )}
 
-          {/* Main text */}
-          <p className="whitespace-pre-wrap leading-relaxed">{displayContent}</p>
+          {/* Chat messages — rendered as WeChat-style bubbles */}
+          {chats ? (
+            chats.map((chat, i) => (
+              <ChatBubble key={i} chat={chat} />
+            ))
+          ) : (
+            <div className="chat-bubble-other">
+              <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+            </div>
+          )}
 
-          {/* Summary */}
+          {/* Summary line */}
           {hasSum && (
-            <div className="mt-2.5 pt-2.5 border-t border-wechat-divider flex items-start gap-1.5">
+            <div className="flex items-start gap-1.5 pt-1">
               <FileText size={11} className="text-wechat-text-light mt-0.5 flex-shrink-0" />
               <p className="text-small text-wechat-text-light">{parsed!.sum}</p>
             </div>
           )}
         </div>
-
-        {/* Option buttons */}
-        {hasOptions && (
-          <div className="flex flex-col gap-1.5 mt-2">
-            {parsed!.options.map((opt, i) => (
-              <button
-                key={i}
-                id={`msg-option-${message.id}-${i}`}
-                onClick={() => handleOptionClick(opt)}
-                disabled={isStreaming}
-                className="option-btn group relative"
-              >
-                <span>{opt}</span>
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-wechat-green text-small">
-                  ↵
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Variable changes */}
-        {parsed?.varsCommands?.merge && Object.keys(parsed.varsCommands.merge).length > 0 && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-small text-wechat-text-light">
-            <Hash size={10} />
-            <span>
-              {Object.entries(parsed.varsCommands.merge)
-                .filter(([, v]) => v !== undefined && v !== null)
-                .map(([k, v]) => `${k}: ${typeof v === 'number' ? (v > 0 ? '+' : '') + v : v}`)
-                .join(' · ')}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );
+}
+
+/** Render a single chat entry as a WeChat-style message */
+function ChatBubble({ chat }: { chat: { type: string; content: string; duration?: number } }) {
+  switch (chat.type) {
+    case 'voice':
+      return (
+        <div className="chat-bubble-other flex items-center gap-2">
+          <Mic size={14} className="text-wechat-text-gray flex-shrink-0" />
+          <span className="text-body">{chat.content || '语音消息'}</span>
+          {chat.duration && (
+            <span className="text-small text-wechat-text-light flex-shrink-0">{chat.duration}"</span>
+          )}
+        </div>
+      );
+
+    case 'video':
+      return (
+        <div className="chat-bubble-other flex items-center gap-2">
+          <Phone size={14} className="text-wechat-green flex-shrink-0" />
+          <div>
+            <p className="text-body">{chat.content || '视频通话'}</p>
+            {chat.duration && (
+              <p className="text-small text-wechat-text-light mt-0.5">通话时长 {formatDuration(chat.duration)}</p>
+            )}
+          </div>
+        </div>
+      );
+
+    case 'image':
+      return (
+        <div className="chat-bubble-other flex items-center gap-2">
+          <Image size={14} className="text-wechat-text-gray flex-shrink-0" />
+          <span className="text-body">{chat.content || '[图片]'}</span>
+        </div>
+      );
+
+    case 'text':
+    default:
+      return (
+        <div className="chat-bubble-other">
+          <p className="whitespace-pre-wrap leading-relaxed">{chat.content}</p>
+        </div>
+      );
+  }
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}秒`;
 }

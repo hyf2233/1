@@ -6,9 +6,10 @@ import ChatInput from './ChatInput';
 import HistoryDrawer from './HistoryDrawer';
 import { MoreHorizontal, Clock } from 'lucide-react';
 
-/** Strip XML tags from streaming text for clean display */
+/** Strip XML tags for clean streaming chat display */
 function stripXmlTags(text: string): string {
-  return text.replace(/<(sum|vars|thinking|think)>[\s\S]*?<\/\1>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+  return text.replace(/<(sum|vars|thinking|think|chat)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export default function ChatDetail() {

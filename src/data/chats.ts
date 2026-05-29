@@ -1,8 +1,6 @@
 // src/data/chats.ts
 import type { ChatSession } from '../types';
 
-const emptyParsed = { thinking: '', maintext: '', options: [] as string[], sum: '', varsRaw: '', varsCommands: { merge: {} as Record<string, any> }, unknown: {} as Record<string, string> };
-
 export const presetChats: ChatSession[] = [
   {
     id: 'chat1', contactId: 'c1', name: '苏晓月 - 遗迹探险',
@@ -15,9 +13,8 @@ export const presetChats: ChatSession[] = [
       { id: 'msg3', role: 'user', content: '我想加入你的下一次探险', timestamp: Date.now() - 7200000 },
       {
         id: 'msg4', role: 'assistant',
-        content: '北边的遗迹最近很不安静，我正好需要一个人手。不过——我得先看看你的本事。明天正午，遗迹入口见。别迟到。',
+        content: '好。看来你是认真的。那我直说了——遗迹里不太平，上次遇到了自动防卫机关。如果你决定加入，明天正午，北城门见。',
         timestamp: Date.now() - 7200000 + 30000,
-        parsed: { ...emptyParsed, maintext: '北边的遗迹最近很不安静，我正好需要一个人手。不过——我得先看看你的本事。\n\n明天正午，遗迹入口见。别迟到。', options: ['接受挑战，准时赴约', '先问清楚具体地点', '表示需要准备装备'] },
       },
     ],
   },
@@ -32,9 +29,8 @@ export const presetChats: ChatSession[] = [
       { id: 'msg7', role: 'user', content: '沉默之塔...没有印象', timestamp: Date.now() - 43200000 },
       {
         id: 'msg8', role: 'assistant',
-        content: '那就对了。知道它的人大多已经不在了。今晚在老地方见面，我会给你一些...参考资料。\n\n带点现金。',
+        content: '那就对了。知道它的人大多已经不在了。今晚老地方见，我给你一些参考资料。带点现金。',
         timestamp: Date.now() - 43200000 + 30000,
-        parsed: { ...emptyParsed, maintext: '那就对了。知道它的人大多已经不在了。今晚在老地方见面，我会给你一些...参考资料。带点现金。', options: ['答应赴约', '询问"老地方"是哪里', '警惕地拒绝'] },
       },
     ],
   },
@@ -45,7 +41,7 @@ export const presetChats: ChatSession[] = [
     createdAt: Date.now() - 259200000, updatedAt: Date.now() - 86400000,
     messages: [
       { id: 'msg9', role: 'user', content: '老师，最近有什么新案子？', timestamp: Date.now() - 259200000 },
-      { id: 'msg10', role: 'assistant', content: '有。而且是一个你会感兴趣的案子。老城区连续三起失踪案，卷宗我刚拿到。来我办公室一趟。', timestamp: Date.now() - 259200000 + 45000 },
+      { id: 'msg10', role: 'assistant', content: '有。而且是你感兴趣的案子。老城区连续三起失踪案，卷宗我刚拿到。来我办公室一趟。', timestamp: Date.now() - 259200000 + 45000 },
     ],
   },
   {

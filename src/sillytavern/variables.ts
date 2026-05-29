@@ -2,7 +2,7 @@
  * Variable System Utilities
  */
 
-import type { ChatSession, ParsedTags } from './types';
+import type { ChatSession, ParsedTags, ChatEntry } from './types';
 import type { ParserEvent } from './stream-parser';
 import { parseVarsBlock, applyVarsPatch } from './vars-merger';
 
@@ -78,21 +78,28 @@ export function aggregateEvents(events: ParserEvent[]): ParsedTags {
     thinking: '',
     maintext: '',
     options: [],
+    chats: [],
     sum: '',
     varsRaw: '',
     varsCommands: { merge: {} },
     unknown: {},
   };
   for (const ev of events) {
-    if (ev.type === 'tag-close') {
+    if (ev.type === 'chat-entry') {
+      parsed.chats.push({
+        type: (ev.chatType as ChatEntry['type']) || 'text',
+        content: ev.content || '',
+        duration: ev.duration,
+      });
+    } else if (ev.type === 'tag-close') {
       if (ev.tag === 'thinking' || ev.tag === 'think') parsed.thinking = ev.full;
       else if (ev.tag === 'maintext') parsed.maintext = ev.full;
       else if (ev.tag === 'sum') parsed.sum = ev.full;
       else if (ev.tag === 'vars') {
         parsed.varsRaw = ev.full;
         parsed.varsCommands = parseVarsBlock(ev.full);
-      } else if (ev.tag === 'option') {
-        // option-line events accumulate options below
+      } else if (ev.tag === 'chat') {
+        // Handled by chat-entry above
       } else {
         parsed.unknown[ev.tag] = ev.full;
       }
