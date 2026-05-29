@@ -43,7 +43,7 @@ export default function Sidebar() {
             key={tab.id}
             id={`tab-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`sidebar-item relative ${activeTab === tab.id ? 'active' : ''}`}
+            className={`sidebar-item relative transition-transform duration-150 hover:scale-105 active:scale-95 ${activeTab === tab.id ? 'active' : ''}`}
             title={tab.label}
           >
             {iconMap[tab.icon]}
@@ -52,9 +52,6 @@ export default function Sidebar() {
               <span className="absolute top-3 right-3 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-wechat-danger text-white text-[9px] px-1">
                 {totalUnread > 99 ? '99+' : totalUnread}
               </span>
-            )}
-            {activeTab === tab.id && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-8 bg-wechat-green rounded-r-full" />
             )}
           </button>
         ))}
