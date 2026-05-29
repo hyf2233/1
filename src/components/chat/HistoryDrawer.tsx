@@ -104,10 +104,10 @@ export default function HistoryDrawer() {
     const contentBody = chatEntryToXml(chatEntry);
 
     const entry = createDefaultEntry();
-    entry.keys = [roleName];
+    entry.keys = [characterName];  // 始终用角色名触发：涉及该角色时才注入对话记录
     entry.content = `${header}\n${contentBody}`;
     entry.order = Date.now();
-    entry.constant = true;
+    entry.constant = false;  // 关键词触发，非始终激活
     entry.position = 'after_char';
 
     const updatedBook = {
