@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-wechat-divider; }
+  body { @apply bg-wechat-bg text-wechat-text font-sans text-body; }
+  ::selection { @apply bg-wechat-green text-white; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400; }
+}
+
+@layer components {
+  .sidebar-item {
+    @apply flex flex-col items-center justify-center gap-1 py-4 px-2 text-wechat-text-gray
+           hover:text-wechat-green transition-colors duration-200 cursor-pointer text-caption;
+  }
+  .sidebar-item.active {
+    @apply text-wechat-green;
+  }
+  .chat-bubble-user {
+    @apply bg-wechat-bubble rounded-sm px-3 py-2 max-w-[70%] text-body ml-auto;
+  }
+  .chat-bubble-other {
+    @apply bg-white rounded-sm px-3 py-2 max-w-[85%] text-body;
+  }
+  .option-btn {
+    @apply w-full text-center py-2.5 px-4 rounded-sm border text-body cursor-pointer
+           transition-all duration-150 hover:border-wechat-green hover:text-wechat-green
+           active:scale-[0.98] border-wechat-divider text-wechat-text;
+  }
+  .option-btn.selected {
+    @apply border-wechat-green text-wechat-green bg-wechat-green-light;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
