@@ -5,9 +5,11 @@ import type { AppSettings, ChatPreset, Lorebook, LorebookEntry } from '../sillyt
 import { DEFAULT_SETTINGS, createDefaultPreset, DEFAULT_FORMAT_PROMPT } from '../sillytavern/types';
 import { assemblePrompt } from '../sillytavern/prompt-assembler';
 import { createLorebookEngine } from '../sillytavern/lorebook-engine';
+import { createDefaultEntry } from '../sillytavern/editor-utils';
 import { presetContacts } from '../data/contacts';
 import { presetMoments } from '../data/moments';
 import { presetChats } from '../data/chats';
+import { presetLorebooks } from '../data/lorebooks';
 
 interface AppState {
   // Navigation
@@ -163,11 +165,49 @@ export const useAppStore = create<AppState>((set, get) => ({
       updatedAt: Date.now(),
     };
 
+    // Auto-record chat summary into dialogue history world book
+    const summary = fakeReply.sum || '对话继续';
+    const historyBookId = `lb-history-${chat.contactId}`;
+    const historyBooks = get().lorebooks;
+    let historyBook = historyBooks.find(lb => lb.id === historyBookId);
+
+    if (!historyBook) {
+      historyBook = {
+        id: historyBookId,
+        name: `对话记录 - ${characterName}`,
+        description: `与${characterName}的对话历史摘要。用于帮助AI记住之前的对话。`,
+        recursiveScanning: false, caseSensitive: false, matchWholeWords: false,
+        createdAt: Date.now(), updatedAt: Date.now(),
+        entries: [],
+      };
+    }
+
+    const summaryEntry = createDefaultEntry();
+    summaryEntry.keys = ['对话', '历史', '之前', '上次', '回顾', characterName, '聊天记录'];
+    summaryEntry.content = `【对话记录 - ${new Date().toLocaleString('zh-CN')}】
+用户说："${content.slice(0, 80)}"
+${characterName}的回应摘要：${summary}`;
+    summaryEntry.order = Date.now();
+    summaryEntry.constant = false;
+    summaryEntry.position = 'after_char';
+
+    const updatedHistoryBook = {
+      ...historyBook,
+      entries: [...historyBook.entries.slice(-19), summaryEntry],
+      updatedAt: Date.now(),
+    };
+
     set(s => ({
       chats: s.chats.map(c => c.id === chat.id ? finalChat : c),
       isStreaming: false,
       streamedText: '',
       currentOptions: fakeReply.options,
+      lorebooks: historyBook.entries.length === 0
+        ? [...s.lorebooks.filter(lb => lb.id !== historyBookId), updatedHistoryBook]
+        : s.lorebooks.map(lb => lb.id === historyBookId ? updatedHistoryBook : lb),
+      activeLorebookIds: s.activeLorebookIds.includes(historyBookId)
+        ? s.activeLorebookIds
+        : [...s.activeLorebookIds, historyBookId],
     }));
   },
 
@@ -213,8 +253,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateSettings: (s) => set({ settings: s }),
 
   // SillyTavern Lorebooks
-  lorebooks: [],
-  activeLorebookIds: [],
+  lorebooks: presetLorebooks,
+  activeLorebookIds: ['lb-format-spec'],
   addLorebook: (lb) => set((st) => ({ lorebooks: [...st.lorebooks, lb] })),
   removeLorebook: (id) => set((st) => ({ lorebooks: st.lorebooks.filter((b) => b.id !== id), activeLorebookIds: st.activeLorebookIds.filter((aid) => aid !== id) })),
   toggleActiveLorebook: (id) => set((st) => ({

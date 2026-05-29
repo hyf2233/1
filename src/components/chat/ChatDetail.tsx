@@ -6,6 +6,11 @@ import ChatInput from './ChatInput';
 import HistoryDrawer from './HistoryDrawer';
 import { MoreHorizontal, Clock } from 'lucide-react';
 
+/** Strip XML tags from streaming text for clean display */
+function stripXmlTags(text: string): string {
+  return text.replace(/<(sum|vars|thinking|think)>[\s\S]*?<\/\1>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 export default function ChatDetail() {
   const activeChat = useAppStore(s => s.activeChat);
   const contacts = useAppStore(s => s.contacts);
@@ -74,7 +79,7 @@ export default function ChatDetail() {
           <div className="flex justify-start mb-3">
             <div className="chat-bubble-other max-w-[80%]">
               <p className="whitespace-pre-wrap leading-relaxed">
-                {streamedText}
+                {stripXmlTags(streamedText)}
                 <span className="inline-block w-[2px] h-[1.1em] bg-wechat-green ml-0.5 align-middle animate-pulse" />
               </p>
             </div>
