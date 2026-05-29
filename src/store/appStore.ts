@@ -59,6 +59,11 @@ interface AppState {
   showToast: (msg: string) => void;
   clearToast: () => void;
 
+  // AI Response review gate
+  pendingAiResponse: { rawText: string; characterName: string; chatId: string; type: 'chat' } | null;
+  setPendingAiResponse: (p: { rawText: string; characterName: string; chatId: string; type: 'chat' } | null) => void;
+  confirmAiResponse: (editedText: string) => void;
+
   // SillyTavern Settings
   settings: AppSettings;
   updateSettings: (s: AppSettings) => void;
@@ -254,25 +259,22 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
         );
 
-        const aiMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: apiResult.maintext,
-          timestamp: Date.now(),
-          parsed: {
-            thinking: apiResult.thinking,
-            maintext: apiResult.maintext,
-            options: [],
-            chats: apiResult.chats,
-            sum: apiResult.sum,
-            varsRaw: apiResult.varsRaw,
-            varsCommands: { merge: get().gameState },
-            unknown: {},
-          },
-          variablesAfter: { ...get().gameState },
-        };
+        // Reconstruct full raw text using chatEntriesToXml for proper format
+        let rawText = '';
+        if (apiResult.thinking) rawText += `<thinking>${apiResult.thinking}</thinking>\n`;
+        if (apiResult.chats.length > 0) rawText += chatEntriesToXml(apiResult.chats, '\n');
+        if (apiResult.sum) rawText += (rawText ? '\n' : '') + `<sum>${apiResult.sum}</sum>`;
+        if (apiResult.varsRaw) rawText += (rawText ? '\n' : '') + `<vars>${apiResult.varsRaw}</vars>`;
+        if (!rawText.trim()) rawText = apiResult.maintext;
 
-        finalizeAndSync(get, set, chat, updatedChat, aiMsg, characterName);
+        // Show review gate instead of processing immediately
+        set(s => ({
+          isStreaming: false,
+          streamedText: '',
+          streamedChats: [],
+          currentOptions: [],
+          pendingAiResponse: { rawText, characterName, chatId: chat.id, type: 'chat' },
+        }));
         return;
       } catch (err: any) {
         const errMsg = err.message || String(err);
@@ -335,7 +337,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       variablesAfter: { ...get().gameState },
     };
 
-    finalizeAndSync(get, set, chat, updatedChat, aiMsg, characterName);
+    // Show review gate for simulated reply too
+    const rawText = chatEntriesToXml(fakeReply.chats, '\n');
+    set(s => ({
+      isStreaming: false, streamedText: '', streamedChats: [], currentOptions: [],
+      pendingAiResponse: { rawText, characterName, chatId: chat.id, type: 'chat' },
+    }));
   },
 
   chooseOption: async (option: string) => {
@@ -411,6 +418,44 @@ export const useAppStore = create<AppState>((set, get) => ({
   toastMessage: null,
   showToast: (msg) => set({ toastMessage: msg }),
   clearToast: () => set({ toastMessage: null }),
+
+  // AI Response review gate
+  pendingAiResponse: null,
+  setPendingAiResponse: (p) => set({ pendingAiResponse: p }),
+  confirmAiResponse: (editedText: string) => {
+    const state = get();
+    const pending = state.pendingAiResponse;
+    if (!pending) return;
+    // Clear pending immediately
+    set({ pendingAiResponse: null, isStreaming: false, streamedText: '', streamedChats: [], currentOptions: [] });
+
+    // Process the edited text — parse chat entries
+    const parsed = parseApiResponse(editedText);
+    const aiMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: parsed.maintext,
+      timestamp: Date.now(),
+      parsed: {
+        thinking: parsed.thinking,
+        maintext: parsed.maintext,
+        options: [],
+        chats: parsed.chats,
+        sum: parsed.sum,
+        varsRaw: parsed.varsRaw,
+        varsCommands: { merge: state.gameState },
+        unknown: {},
+      },
+      variablesAfter: { ...state.gameState },
+    };
+
+    const chat = state.chats.find(c => c.id === pending.chatId);
+    if (!chat) return;
+    // Find the updatedChat (with user message added)
+    const updatedChat = state.chats.find(c => c.id === pending.chatId);
+    if (!updatedChat) return;
+    finalizeAndSync(get, set, chat, updatedChat, aiMsg, pending.characterName);
+  },
 
   // SillyTavern Settings
   settings: DEFAULT_SETTINGS,

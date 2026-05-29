@@ -4,6 +4,7 @@ import Avatar from '../shared/Avatar';
 import Modal from '../shared/Modal';
 import ContactDetail from './ContactDetail';
 import { Search, Sparkles, UserPlus, X, Loader2, Info } from 'lucide-react';
+import AiResponseReview from '../shared/AiResponseReview';
 import { assemblePrompt } from '../../sillytavern/prompt-assembler';
 import type { Contact } from '../../types';
 
@@ -48,6 +49,7 @@ export default function ContactList() {
   const [search, setSearch] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiResult, setAiResult] = useState<Partial<Contact>[] | null>(null);
+  const [pendingRawResponse, setPendingRawResponse] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const selected = selectedId ? contacts.find(c => c.id === selectedId) ?? null : null;
@@ -115,20 +117,24 @@ export default function ContactList() {
       const data = await res.json();
       const raw = data.choices?.[0]?.message?.content || '';
 
-      // Extract <list> content
-      const listMatch = raw.match(/<list>([\s\S]*?)<\/list>/i);
-      const listXml = listMatch ? listMatch[0] : raw;
-
-      const parsed = parseCharListXml(listXml);
-      if (parsed.length === 0) {
-        showToast('AI 未生成有效角色，请尝试更具体的描述');
-      } else {
-        setAiResult(parsed);
-      }
+      // Show review gate with full raw response
+      setPendingRawResponse(raw);
     } catch (err: any) {
       showToast(`生成失败: ${err.message?.slice(0, 60)}`);
     } finally {
       setAiGenerating(false);
+    }
+  };
+
+  const handleSearchConfirm = (editedText: string) => {
+    setPendingRawResponse(null);
+    const listMatch = editedText.match(/<list>([\s\S]*?)<\/list>/i);
+    const listXml = listMatch ? listMatch[0] : editedText;
+    const parsed = parseCharListXml(listXml);
+    if (parsed.length === 0) {
+      showToast('未找到有效角色数据，请检查 <list> 标签');
+    } else {
+      setAiResult(parsed);
     }
   };
 
@@ -281,6 +287,15 @@ export default function ContactList() {
       <Modal open={!!selected} onClose={() => setSelectedId(null)} title="联系人详情">
         {selected && <ContactDetail contact={selected} onClose={() => setSelectedId(null)} />}
       </Modal>
+
+      {/* AI response review gate */}
+      <AiResponseReview
+        open={!!pendingRawResponse}
+        rawText={pendingRawResponse || ''}
+        context="通讯录搜索"
+        onConfirm={handleSearchConfirm}
+        onCancel={() => setPendingRawResponse(null)}
+      />
     </div>
   );
 }

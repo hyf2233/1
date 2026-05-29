@@ -6,6 +6,7 @@ import ChatInput from './ChatInput';
 import HistoryDrawer from './HistoryDrawer';
 import ContactDetail from '../contacts/ContactDetail';
 import Modal from '../shared/Modal';
+import AiResponseReview from '../shared/AiResponseReview';
 import { MoreHorizontal, Clock } from 'lucide-react';
 
 function stripXmlTags(text: string): string {
@@ -23,6 +24,9 @@ export default function ChatDetail() {
   const toggleHistoryDrawer = useAppStore(s => s.toggleHistoryDrawer);
   const backtrackTo = useAppStore(s => s.backtrackTo);
   const deleteMessage = useAppStore(s => s.deleteMessage);
+  const pendingAiResponse = useAppStore(s => s.pendingAiResponse);
+  const confirmAiResponse = useAppStore(s => s.confirmAiResponse);
+  const setPendingAiResponse = useAppStore(s => s.setPendingAiResponse);
   const chat = activeChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -168,6 +172,17 @@ export default function ChatDetail() {
         <Modal open={showContactDetail} onClose={() => setShowContactDetail(false)} title="联系人详情">
           <ContactDetail contact={contact} onClose={() => setShowContactDetail(false)} />
         </Modal>
+      )}
+
+      {/* AI response review gate */}
+      {contact && (
+        <AiResponseReview
+          open={!!pendingAiResponse && pendingAiResponse.type === 'chat'}
+          rawText={pendingAiResponse?.rawText || ''}
+          context={`聊天 · ${contact.name}`}
+          onConfirm={confirmAiResponse}
+          onCancel={() => setPendingAiResponse(null)}
+        />
       )}
     </div>
   );
