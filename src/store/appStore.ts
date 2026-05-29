@@ -6,6 +6,9 @@ import { DEFAULT_SETTINGS, createDefaultPreset, DEFAULT_FORMAT_PROMPT } from '..
 import { assemblePrompt } from '../sillytavern/prompt-assembler';
 import { createLorebookEngine } from '../sillytavern/lorebook-engine';
 import { createDefaultEntry } from '../sillytavern/editor-utils';
+import { StreamTagParser } from '../sillytavern/stream-parser';
+import { aggregateEvents } from '../sillytavern/variables';
+import { DEFAULT_TAGS, DEFAULT_OPAQUE_TAGS } from '../sillytavern/types';
 import { presetContacts } from '../data/contacts';
 import { presetMoments } from '../data/moments';
 import { presetChats } from '../data/chats';
@@ -99,6 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!activePreset) return;
 
     const activeLorebooks = lorebooks.filter(lb => activeLorebookIds.includes(lb.id));
+    const presetSettings = activePreset.settings;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -120,11 +124,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentOptions: [],
     }));
 
-    // Build SillyTavern prompt with lorebooks
     const userName = settings.userName || '用户';
     const characterName = contact?.name || settings.characterName || 'AI';
 
-    const { systemPrompt, matchedEntries } = assemblePrompt({
+    const { messages: promptMessages, matchedEntries } = assemblePrompt({
       userInput: content,
       history: chat.messages,
       preset: activePreset,
@@ -135,7 +138,45 @@ export const useAppStore = create<AppState>((set, get) => ({
       formatPrompt: settings.formatPromptTemplate || DEFAULT_FORMAT_PROMPT,
     });
 
-    // Simulate AI response in SillyTavern XML format
+    // If API key is configured, make a real API call
+    const hasApiKey = settings.api.apiKey && settings.api.apiKey.trim().length > 0;
+
+    if (hasApiKey) {
+      try {
+        const apiResult = await callRealApi(
+          settings.api.baseUrl, settings.api.apiKey, settings.api.model,
+          promptMessages, presetSettings, settings.customTags,
+          (streamedMaintext, options) => {
+            set(s => ({ streamedText: streamedMaintext, currentOptions: options }));
+          },
+        );
+
+        const aiMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: apiResult.maintext,
+          timestamp: Date.now(),
+          parsed: {
+            thinking: apiResult.thinking,
+            maintext: apiResult.maintext,
+            options: apiResult.options,
+            sum: apiResult.sum,
+            varsRaw: apiResult.varsRaw,
+            varsCommands: { merge: get().gameState },
+            unknown: {},
+          },
+          variablesAfter: { ...get().gameState },
+        };
+
+        finalizeMessage(get, set, chat, updatedChat, aiMsg, content, characterName, apiResult.sum);
+        return;
+      } catch (err) {
+        console.error('API call failed, falling back to simulated response:', err);
+        set(s => ({ streamedText: '' }));
+      }
+    }
+
+    // Fallback: simulated tavern-style response
     const fakeReply = generateTavernReply(content, characterName, activeLorebooks, matchedEntries);
     for (let i = 0; i < fakeReply.maintext.length; i++) {
       await new Promise(r => setTimeout(r, 25 + Math.random() * 35));
@@ -159,56 +200,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       variablesAfter: { ...get().gameState },
     };
 
-    const finalChat = {
-      ...updatedChat,
-      messages: [...updatedChat.messages, aiMsg],
-      updatedAt: Date.now(),
-    };
-
-    // Auto-record chat summary into dialogue history world book
-    const summary = fakeReply.sum || '对话继续';
-    const historyBookId = `lb-history-${chat.contactId}`;
-    const historyBooks = get().lorebooks;
-    let historyBook = historyBooks.find(lb => lb.id === historyBookId);
-
-    if (!historyBook) {
-      historyBook = {
-        id: historyBookId,
-        name: `对话记录 - ${characterName}`,
-        description: `与${characterName}的对话历史摘要。用于帮助AI记住之前的对话。`,
-        recursiveScanning: false, caseSensitive: false, matchWholeWords: false,
-        createdAt: Date.now(), updatedAt: Date.now(),
-        entries: [],
-      };
-    }
-
-    const summaryEntry = createDefaultEntry();
-    summaryEntry.keys = ['对话', '历史', '之前', '上次', '回顾', characterName, '聊天记录'];
-    summaryEntry.content = `【对话记录 - ${new Date().toLocaleString('zh-CN')}】
-用户说："${content.slice(0, 80)}"
-${characterName}的回应摘要：${summary}`;
-    summaryEntry.order = Date.now();
-    summaryEntry.constant = false;
-    summaryEntry.position = 'after_char';
-
-    const updatedHistoryBook = {
-      ...historyBook,
-      entries: [...historyBook.entries.slice(-19), summaryEntry],
-      updatedAt: Date.now(),
-    };
-
-    set(s => ({
-      chats: s.chats.map(c => c.id === chat.id ? finalChat : c),
-      isStreaming: false,
-      streamedText: '',
-      currentOptions: fakeReply.options,
-      lorebooks: historyBook.entries.length === 0
-        ? [...s.lorebooks.filter(lb => lb.id !== historyBookId), updatedHistoryBook]
-        : s.lorebooks.map(lb => lb.id === historyBookId ? updatedHistoryBook : lb),
-      activeLorebookIds: s.activeLorebookIds.includes(historyBookId)
-        ? s.activeLorebookIds
-        : [...s.activeLorebookIds, historyBookId],
-    }));
+    finalizeMessage(get, set, chat, updatedChat, aiMsg, content, characterName, fakeReply.sum);
   },
 
   chooseOption: async (option: string) => {
@@ -273,13 +265,218 @@ ${characterName}的回应摘要：${summary}`;
   updatePreset: (p) => set((st) => ({ presets: st.presets.map((pr) => (pr.id === p.id ? p : pr)) })),
 }));
 
-// Tavern-style reply generator: produces XML-tagged responses aware of active lorebooks
+// ========== Helper Functions ==========
+
+interface ApiReply { thinking: string; maintext: string; options: string[]; sum: string; varsRaw: string; }
+
+/** Make a real API call with SSE streaming */
+async function callRealApi(
+  baseUrl: string, apiKey: string, model: string,
+  messages: { role: string; content: string }[],
+  presetSettings: Record<string, any>,
+  customTags: string[],
+  onStream: (maintext: string, options: string[]) => void,
+): Promise<ApiReply> {
+  const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
+  const stream = presetSettings.stream_openai !== false;
+
+  const body: Record<string, any> = {
+    model: presetSettings.openai_model || model,
+    messages,
+    stream,
+  };
+  if (presetSettings.temp_openai !== undefined) body.temperature = presetSettings.temp_openai;
+  if (presetSettings.openai_max_tokens) body.max_tokens = presetSettings.openai_max_tokens;
+  if (presetSettings.top_p_openai !== undefined) body.top_p = presetSettings.top_p_openai;
+  if (presetSettings.freq_pen_openai !== undefined) body.frequency_penalty = presetSettings.freq_pen_openai;
+  if (presetSettings.pres_pen_openai !== undefined) body.presence_penalty = presetSettings.pres_pen_openai;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`API ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  if (!stream) {
+    const data = await res.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    return parseApiResponse(raw);
+  }
+
+  // SSE streaming
+  const parser = new StreamTagParser(customTags.length ? customTags : [...DEFAULT_TAGS], [...DEFAULT_OPAQUE_TAGS]);
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let maintext = '';
+  const options: string[] = [];
+
+  // Track current tag context for display filtering
+  let currentDisplayTag = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split('\n');
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6);
+      if (data === '[DONE]') continue;
+
+      try {
+        const json = JSON.parse(data);
+        const delta = json.choices?.[0]?.delta?.content;
+        if (!delta) continue;
+
+        fullText += delta;
+
+        // Parse with stream tag parser
+        const events = parser.feed(delta);
+
+        for (const ev of events) {
+          if (ev.type === 'tag-open') {
+            currentDisplayTag = ev.tag;
+            if (ev.tag === 'option') {
+              // Start collecting options
+            }
+          } else if (ev.type === 'tag-close') {
+            if (ev.tag === 'option') {
+              // Options are collected via option-line events
+            }
+            if (ev.tag === currentDisplayTag) {
+              currentDisplayTag = '';
+            }
+          } else if (ev.type === 'option-line') {
+            if (ev.line.trim()) options.push(ev.line.trim());
+          } else if (ev.type === 'tag-chunk') {
+            if (ev.tag === 'maintext') {
+              maintext += ev.chunk;
+            }
+          }
+        }
+
+        // For display during streaming: show maintext only (clean reading experience)
+        const displayText = maintext || fullText;
+        onStream(displayText, options);
+      } catch {
+        // Skip malformed SSE lines
+      }
+    }
+  }
+
+  // Final parse of complete response
+  const finalEvents = parser.finish();
+  // Process any remaining option-line events from finish()
+  for (const ev of finalEvents) {
+    if (ev.type === 'option-line' && ev.line.trim()) {
+      if (!options.includes(ev.line.trim())) options.push(ev.line.trim());
+    }
+  }
+
+  const aggregated = aggregateEvents([...parser['events'] || [], ...finalEvents]);
+  const parsed = parseApiResponse(fullText);
+
+  return {
+    thinking: parsed.thinking || aggregated.thinking || '',
+    maintext: parsed.maintext || maintext || fullText,
+    options: parsed.options.length > 0 ? parsed.options : options,
+    sum: parsed.sum || aggregated.sum || '',
+    varsRaw: parsed.varsRaw || '',
+  };
+}
+
+/** Parse raw API response text into structured parts */
+function parseApiResponse(raw: string): ApiReply {
+  const thinking = extractTag(raw, 'thinking') || extractTag(raw, 'think') || '';
+  const maintext = extractTag(raw, 'maintext') || raw.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '').trim();
+  const sum = extractTag(raw, 'sum') || '';
+  const varsRaw = extractTag(raw, 'vars') || '';
+
+  const optionTag = extractTag(raw, 'option');
+  const options = optionTag
+    ? optionTag.split('\n').map(l => l.trim()).filter(Boolean)
+    : [];
+
+  return { thinking, maintext, options, sum, varsRaw };
+}
+
+function extractTag(text: string, tag: string): string | null {
+  const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+  const match = text.match(regex);
+  return match ? match[1].trim() : null;
+}
+
+/** Finalize the message: add AI message, record history, update state */
+function finalizeMessage(
+  get: () => AppState, set: any,
+  chat: ChatSession, updatedChat: ChatSession,
+  aiMsg: ChatMessage, userContent: string,
+  characterName: string, summary: string,
+) {
+  const finalChat = {
+    ...updatedChat,
+    messages: [...updatedChat.messages, aiMsg],
+    updatedAt: Date.now(),
+  };
+
+  const historyBookId = `lb-history-${chat.contactId}`;
+  const historyBooks = get().lorebooks;
+  let historyBook = historyBooks.find(lb => lb.id === historyBookId);
+  if (!historyBook) {
+    historyBook = {
+      id: historyBookId,
+      name: `对话记录 - ${characterName}`,
+      description: `与${characterName}的对话历史摘要。用于帮助AI记住之前的对话。`,
+      recursiveScanning: false, caseSensitive: false, matchWholeWords: false,
+      createdAt: Date.now(), updatedAt: Date.now(),
+      entries: [],
+    };
+  }
+
+  const se = createDefaultEntry();
+  se.keys = ['对话', '历史', '之前', '上次', '回顾', characterName, '聊天记录'];
+  se.content = `【对话记录 - ${new Date().toLocaleString('zh-CN')}】
+用户说："${userContent.slice(0, 80)}"
+${characterName}的回应摘要：${summary || '对话继续'}`;
+  se.order = Date.now();
+  se.constant = false;
+  se.position = 'after_char';
+
+  const updatedHistoryBook = {
+    ...historyBook,
+    entries: [...historyBook.entries.slice(-19), se],
+    updatedAt: Date.now(),
+  };
+
+  set((s: AppState) => ({
+    chats: s.chats.map(c => c.id === chat.id ? finalChat : c),
+    isStreaming: false,
+    streamedText: '',
+    currentOptions: aiMsg.parsed?.options || [],
+    lorebooks: historyBook.entries.length === 0
+      ? [...s.lorebooks.filter(lb => lb.id !== historyBookId), updatedHistoryBook]
+      : s.lorebooks.map(lb => lb.id === historyBookId ? updatedHistoryBook : lb),
+    activeLorebookIds: s.activeLorebookIds.includes(historyBookId)
+      ? s.activeLorebookIds
+      : [...s.activeLorebookIds, historyBookId],
+  }));
+}
+
+// Tavern-style fallback reply generator
 function generateTavernReply(
   userInput: string, characterName: string,
-  activeLorebooks: Lorebook[], matchedEntries: { entry: LorebookEntry; score: number; matchedKeywords: string[] }[],
+  _activeLorebooks: Lorebook[], matchedEntries: { entry: LorebookEntry; score: number; matchedKeywords: string[] }[],
 ): { maintext: string; options: string[]; sum: string; thinking: string } {
-
-  // Inject world book context into the character's response style
   const hasWorldContext = matchedEntries.length > 0;
   const worldHints = matchedEntries.slice(0, 3).map(m => m.entry.content.slice(0, 80)).join('; ');
 
